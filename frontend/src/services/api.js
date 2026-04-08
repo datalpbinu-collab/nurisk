@@ -2,7 +2,7 @@
 import axios from "axios"
 
 const api = axios.create({
-  baseURL: "http://192.168.1.107:5000" // backend kamu
+  baseURL: "https://nupeduli-pusdatin-nu-backend.hf.space" // backend kamu
 })
 
 export default api

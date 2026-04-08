@@ -1,22 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <!-- Base application theme. -->
-    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-        <!-- Customize your theme here. -->
-        <item name="colorPrimary">@color/colorPrimary</item>
-        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
-        <item name="colorAccent">@color/colorAccent</item>
+    <!-- 1. TEMA UTAMA APLIKASI (NATIVE MASTER) -->
+    <!-- Menggunakan Light.NoActionBar agar tidak ada header bawaan Android yang muncul -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        
+        <!-- Warna Identitas PWNU Jateng -->
+        <item name="colorPrimary">#006432</item>         <!-- NU Green -->
+        <item name="colorPrimaryDark">#006432</item>     <!-- Status Bar Green -->
+        <item name="colorAccent">#c5a059</item>         <!-- NU Gold -->
+
+        <!-- Optimasi Agar Terasa Native (Bukan Webview) -->
+        <item name="android:windowBackground">#f8fafc</item> <!-- Warna background layar saat memuat -->
+        <item name="android:windowNoTitle">true</item>
+        <item name="windowActionBar">false</item>
+        
+        <!-- Integrasi Status Bar (Jam, Baterai, dkk) -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">#006432</item>
+        
+        <!-- Mencegah keyboard merusak tata letak (Stuck Navigation) -->
+        <item name="android:windowSoftInputMode">adjustResize</item>
     </style>
 
-    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <!-- 2. TEMA SAAT LAUNCH (SPLASH SCREEN) -->
+    <!-- Disesuaikan dengan standar Capacitor terbaru (Android 12+) -->
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <!-- Background saat aplikasi pertama kali diklik -->
+        <item name="windowSplashScreenBackground">#006432</item>
+        
+        <!-- Icon yang muncul di tengah Splash Screen -->
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_round</item>
+        
+        <!-- Durasi ikon Splash muncul (dalam milidetik) -->
+        <item name="windowSplashScreenAnimationDuration">1000</item>
+        
+        <!-- Tema yang digunakan SETELAH splash screen selesai -->
+        <item name="postSplashScreenTheme">@style/AppTheme</item>
+    </style>
+
+    <!-- 3. TEMA TAMBAHAN (BACKWARD COMPATIBILITY) -->
+    <style name="AppTheme.NoActionBar" parent="AppTheme">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
-        <item name="android:background">@null</item>
     </style>
 
-
-    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
-    </style>
 </resources>
