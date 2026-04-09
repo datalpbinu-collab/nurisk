@@ -29,18 +29,9 @@ function App() {
   const [userData, setUserData] = useState(null);
   const [showLogin, setShowLogin] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [navStack, setNavStack] = useState(['dashboard']);
-  const [selectedIncident, setSelectedIncident] = useState(null);
   const [incidents, setIncidents] = useState([]);
-  const [inventory, setInventory] = useState([]);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [syncQueue, setSyncQueue] = useState([]);
-  const [weather, setWeather] = useState(null);
-  const [currentCoords, setCurrentCoords] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-
-  const stateRef = useRef({ activeTab, navStack, selectedIncident, isLoggedIn, syncQueue });
-  useEffect(() => { stateRef.current = { activeTab, navStack, selectedIncident, isLoggedIn, syncQueue }; }, [activeTab, navStack, selectedIncident, isLoggedIn, syncQueue]);
 
   const storage = useMemo(() => ({
     set: async (key, val) => await Preferences.set({ key, value: JSON.stringify(val) }),
@@ -53,27 +44,14 @@ function App() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [resInc, resInv] = await Promise.all([api.get('/api/incidents'), api.get('/api/inventory')]);
+      const resInc = await api.get('/api/incidents');
       setIncidents(resInc.data);
-      setInventory(resInv.data);
       await storage.set('cache_incidents', resInc.data);
     } catch (err) {
       const cInc = await storage.get('cache_incidents');
       if (cInc) setIncidents(cInc);
     }
   }, [storage]);
-
-  const navigateTo = (tab) => {
-    if (tab === activeTab) return;
-    setActiveTab(tab);
-    if (isMobile) Haptics.impact({ style: ImpactStyle.Light });
-  };
-
-  const handleLogout = async () => {
-    await storage.remove('userData');
-    await storage.remove('isLoggedIn');
-    window.location.reload();
-  };
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -110,36 +88,22 @@ function App() {
           <img src="https://pwnu-jateng.org/uploads/infoumum/20250825111304-2025-08-25infoumum111252.png" className="h-8 md:h-10" alt="logo" />
           <h1 className="font-black text-[10px] md:text-sm text-white uppercase italic tracking-tighter leading-none">PWNU JATENG COMMAND CENTER</h1>
         </div>
-        <button onClick={handleLogout} className="text-white/40 hover:text-white p-2 transition-all"><i className="fas fa-power-off"></i></button>
+        <button onClick={() => { storage.remove('userData'); window.location.reload(); }} className="text-white/40 hover:text-white p-2 transition-all"><i className="fas fa-power-off"></i></button>
       </header>
 
       <div className="flex flex-1 overflow-hidden relative flex-col md:flex-row">
         {!isMobile && (
           <aside className="w-[85px] bg-white border-r border-slate-200 flex flex-col items-center py-8 gap-10 shrink-0 z-40 shadow-sm">
-            <NavBtn icon="home" label="Home" active={activeTab === 'dashboard'} onClick={() => navigateTo('dashboard')} />
-            <NavBtn icon="crosshairs" label="HUD" active={activeTab === 'command'} onClick={() => navigateTo('command')} />
-            <NavBtn icon="table" label="Missions" active={activeTab === 'manager'} onClick={() => navigateTo('manager')} />
-            <NavBtn icon="boxes" label="Assets" active={activeTab === 'assets'} onClick={() => navigateTo('assets')} />
+            <NavBtn icon="home" label="Home" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
+            <NavBtn icon="crosshairs" label="HUD" active={activeTab === 'command'} onClick={() => setActiveTab('command')} />
           </aside>
         )}
-
         <main className="flex-1 relative bg-white overflow-hidden shadow-inner">
           <div className="h-full w-full overflow-y-auto custom-scrollbar p-4 md:p-8">
-            {activeTab === 'dashboard' && <DashboardHome incidents={incidents} onNavigate={navigateTo} />}
+            {activeTab === 'dashboard' && <DashboardHome incidents={incidents} onNavigate={setActiveTab} />}
             {activeTab === 'command' && <MapHUD />}
-            {activeTab === 'manager' && <MissionManager />}
-            {activeTab === 'assets' && <InventoryView />}
           </div>
         </main>
-
-        {isMobile && (
-          <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-100 flex justify-around items-center px-2 z-[5000] pb-safe shadow-[0_-5px_25px_rgba(0,0,0,0.1)]">
-            <MobileNavBtn icon="home" label="Home" active={activeTab === 'dashboard'} onClick={() => navigateTo('dashboard')} />
-            <MobileNavBtn icon="crosshairs" label="HUD" active={activeTab === 'command'} onClick={() => navigateTo('command')} />
-            <MobileNavBtn icon="table" label="Misi" active={activeTab === 'manager'} onClick={() => navigateTo('manager')} />
-            <MobileNavBtn icon="boxes" label="Aset" active={activeTab === 'assets'} onClick={() => navigateTo('assets')} />
-          </nav>
-        )}
       </div>
       {!isMobile && <LogFooter />}
     </div>
@@ -166,9 +130,7 @@ function DashboardHome({ incidents, onNavigate }) {
 function KPIBox({ label, value, color, icon }) {
   return (
     <div className="bento-card p-6 flex flex-col items-center justify-center text-center group">
-      <div className={`w-12 h-12 rounded-2xl mb-3 flex items-center justify-center bg-slate-50 group-hover:bg-[#006432]/10 transition-colors`}>
-        <i className={`fas fa-${icon} ${color} text-lg`}></i>
-      </div>
+      <div className={`w-12 h-12 rounded-2xl mb-3 flex items-center justify-center bg-slate-50 group-hover:bg-[#006432]/10 transition-colors`}><i className={`fas fa-${icon} ${color} text-lg`}></i></div>
       <p className={`text-3xl font-black ${color} leading-none italic tracking-tighter`}>{value}</p>
       <p className="text-[9px] font-black text-slate-400 uppercase mt-2 tracking-widest leading-tight">{label}</p>
     </div>
@@ -178,9 +140,7 @@ function KPIBox({ label, value, color, icon }) {
 function NavBtn({ icon, label, active, onClick }) {
   return (
     <div onClick={onClick} className={`group flex flex-col items-center gap-1.5 cursor-pointer transition-all duration-300 w-full px-1 ${active ? 'text-[#006432]' : 'text-slate-300 hover:text-[#006432]'}`}>
-      <div className={`p-4 rounded-[26px] transition-all ${active ? 'bg-green-50 shadow-lg scale-110 border border-green-100' : 'group-hover:bg-slate-50'}`}>
-        <i className={`fas fa-${icon} text-lg`}></i>
-      </div>
+      <div className={`p-4 rounded-[26px] transition-all ${active ? 'bg-green-50 shadow-lg scale-110 border border-green-100' : 'group-hover:bg-slate-50'}`}><i className={`fas fa-${icon} text-lg`}></i></div>
       <span className="text-[8px] font-black uppercase tracking-widest opacity-80">{label}</span>
     </div>
   );
