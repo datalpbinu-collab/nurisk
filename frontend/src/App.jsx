@@ -47,7 +47,8 @@ function App() {
   // --- STATE AUTH & SESSION ---
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userData, setUserData] = useState(null);
-  
+  const [showLogin, setShowLogin] = useState(false);
+
   // --- STATE NAVIGATION (ADVANCED STACK) ---
   const [activeTab, setActiveTab] = useState('dashboard');
   const [navStack, setNavStack] = useState(['dashboard']);
@@ -218,6 +219,11 @@ function App() {
       fetchData();
     };
     bootstrap();
+    if (window.location.pathname === '/login') {
+      setShowLogin(true);
+    }
+
+
 
     socket.on('emergency_broadcast', async (data) => {
       await LocalNotifications.schedule({
@@ -273,17 +279,35 @@ function App() {
   if (path === '/gabung') return <VolunteerRegister />;
   
   if (!isLoggedIn) {
-    return <div className="h-screen w-screen relative bg-white">
+  return (
+    <div className="h-screen w-screen relative bg-white overflow-hidden">
+      {/* 1. Dashboard publik tetap terlihat di belakang */}
       <PublicDashboard incidents={incidents} />
+      
+      {/* 2. Tombol Login sekarang punya fungsi onClick */}
       <button 
-  onClick={() => setShowLogin(true)} 
-  className="fixed bottom-10 right-10 z-[2500] bg-[#006432] ..."
->
-  <i className="fas fa-user-shield text-xl"></i>
-</button>
-      <Login onLogin={handleLogin} />
-    </div>;
-  }
+        onClick={() => setShowLogin(true)} // <-- Saat diklik, showLogin jadi TRUE
+        className="fixed bottom-10 right-10 z-[2500] bg-[#006432] text-white p-5 rounded-full shadow-2xl animate-bounce border-4 border-white"
+      >
+        <i className="fas fa-user-shield text-xl"></i>
+      </button>
+
+      {/* 3. Logika Munculkan Kotak Login */}
+      {showLogin && ( // <-- Jika showLogin bernilai TRUE, maka munculkan komponen di bawah ini
+        <Login 
+          onLoginSuccess={(user) => {
+            setUserData(user);
+            setIsLoggedIn(true);
+            setShowLogin(false); // Tutup login setelah berhasil
+            fetchData();
+          }} 
+          onGoToRegister={() => window.location.pathname = '/gabung'} 
+          onClose={() => setShowLogin(false)} // Fungsi untuk tombol silang (tutup)
+        />
+      )}
+    </div>
+  );
+}
 
   if (userData?.role === 'RELAWAN' || path === '/v') {
     return <RelawanTactical user={userData} coords={currentCoords} onOfflineSubmit={handleDataSubmit} onLogout={handleLogout} />;
