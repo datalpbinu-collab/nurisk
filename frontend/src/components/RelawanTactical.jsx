@@ -9,7 +9,10 @@ import 'leaflet/dist/leaflet.css';
 // --- KOMPONEN PENDUKUNG ---
 const MapRefresher = () => {
   const map = useMap();
-  useEffect(() => { setTimeout(() => map.invalidateSize(), 500); }, [map]);
+  useEffect(() => { 
+    const timer = setTimeout(() => map.invalidateSize(), 500); 
+    return () => clearTimeout(timer);
+  }, [map]);
   return null;
 };
 
@@ -17,42 +20,45 @@ const HeatmapLayer = ({ incidents }) => {
   const map = useMap();
   useEffect(() => {
     if (!incidents || !incidents.length) return;
+    
+    // VALIDASI: Filter hanya koordinat yang benar-benar angka
     const points = incidents
-      .filter(i => i.latitude && i.longitude && !isNaN(parseFloat(i.latitude)))
+      .filter(i => i.latitude && i.longitude && !isNaN(parseFloat(i.latitude)) && !isNaN(parseFloat(i.longitude)))
       .map(i => [parseFloat(i.latitude), parseFloat(i.longitude), 0.7]);
 
     if (points.length > 0) {
+      // @ts-ignore
       const heat = L.heatLayer(points, { radius: 25, blur: 15 }).addTo(map);
-      return () => { if (map && heat) map.removeLayer(heat); };
+      return () => {
+        if (map && heat) map.removeLayer(heat);
+      };
     }
   }, [incidents, map]);
   return null;
 };
 
-const RelawanTactical = ({ user }) => {
+const RelawanTactical = ({ user, coords, onOfflineSubmit, onLogout }) => {
   // --- STATE CORE ---
   const [data, setData] = useState([]);
   const [radarTime, setRadarTime] = useState(null);
-  const [location, setLocation] = useState({ lat: -7.15, lng: 110.14 });
-  const [gpsActive, setGpsActive] = useState(false);
-  const [isOffline, setIsOffline] = useState(false);
+  const [location, setLocation] = useState(coords || { lat: -7.15, lng: 110.14 });
+  const [gpsActive, setGpsActive] = useState(!!coords);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   // --- STATE ORKESTRASI (WORKFLOW BARU) ---
   const [showDutyForm, setShowDutyForm] = useState(false);
   const [targetIncident, setTargetIncident] = useState(null);
   const [availability, setAvailability] = useState({ from: '', until: '' });
-  const [myDeployments, setMyDeployments] = useState([]);
 
   // 1. DATA SYNC & PCNU FILTER
   const fetchOps = async () => {
     try {
-      const [resInc, resRadar, resMyTasks] = await Promise.all([
+      const [resInc, resRadar] = await Promise.all([
         api.get('/api/incidents'),
         axios.get('https://api.rainviewer.com/public/weather-maps.json'),
-        api.get(`/api/volunteers/${user.id}/task`) // Data tugas saya
       ]);
       
-      const filtered = resInc.data.filter(i => i.region === user.region || i.priority_level === 'CRITICAL');
+      const filtered = resInc.data.filter((i) => i.region === user.region || i.priority_level === 'CRITICAL');
       setData(filtered);
       setIsOffline(false);
       localStorage.setItem(`cache_ops_${user.region}`, JSON.stringify(filtered));
@@ -70,16 +76,13 @@ const RelawanTactical = ({ user }) => {
     return () => clearInterval(interval);
   }, [user.region]);
 
-  // 2. LIVE GPS TRACKING
+  // 2. UPDATE LOCATION FROM PROPS
   useEffect(() => {
-    const watchId = navigator.geolocation.watchPosition((pos) => {
-      const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    if (coords) {
       setLocation(coords);
       setGpsActive(true);
-      api.patch(`/api/inventory/volunteers/${user.id}/ping`, coords).catch(() => {});
-    }, () => setGpsActive(false), { enableHighAccuracy: true });
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, [user.id]);
+    }
+  }, [coords]);
 
   // 3. LOGIKA AMBIL KESEDIAAN (APPLY DUTY)
   const handleApplyDuty = async () => {
@@ -99,8 +102,8 @@ const RelawanTactical = ({ user }) => {
   };
 
   const stats = useMemo(() => ({
-    aktif: data.filter(i => i.status !== 'completed').length,
-    critical: data.filter(i => i.priority_level === 'CRITICAL').length,
+    aktif: data.filter((i) => i.status !== 'completed').length,
+    critical: data.filter((i) => i.priority_level === 'CRITICAL').length,
     jiwa: data.reduce((acc, curr) => acc + (parseInt(curr.dampak_manusia?.terdampak) || 0), 0)
   }), [data]);
 
@@ -113,13 +116,13 @@ const RelawanTactical = ({ user }) => {
           <img src="https://pwnu-jateng.org/uploads/infoumum/20250825111304-2025-08-25infoumum111252.png" className="h-8 border border-white/20 rounded-full" alt="logo" />
           <div className="leading-none">
             <h1 className="text-sm font-black uppercase italic text-white leading-none">TRC {user.region}</h1>
-            <p className="text-[8px] font-bold text-green-200 uppercase tracking-widest mt-1">{user.full_name}</p>
+            <p className="text-[8px] font-bold text-green-200 uppercase tracking-widest mt-1">{user.full_name || user.name}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
            {isOffline && <i className="fas fa-wifi-slash text-red-400 text-xs animate-pulse"></i>}
            <div className={`w-2.5 h-2.5 rounded-full ${gpsActive ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-red-500 animate-ping'}`}></div>
-           <i className="fas fa-power-off text-white/30 ml-2" onClick={() => { localStorage.clear(); window.location.reload(); }}></i>
+           <i className="fas fa-power-off text-white/30 ml-2" onClick={onLogout}></i>
         </div>
       </nav>
 
@@ -133,15 +136,15 @@ const RelawanTactical = ({ user }) => {
            <KPIBox label="Zonasi" value={user.region} color="text-nu-green" isText />
         </div>
 
-        {/* --- URGENT BROADCAST (PENGAMBILAN AKSI MANDIRI) --- */}
-        {data.filter(i => i.priority_level === 'CRITICAL' && i.status !== 'completed').map(i => (
-          <div key={i.id} className="bg-red-600 p-5 rounded-[30px] text-white shadow-2xl animate-in fade-in slide-in-from-top border-b-4 border-black/20 relative overflow-hidden">
+        {/* --- URGENT BROADCAST --- */}
+        {data.filter((i) => i.priority_level === 'CRITICAL' && i.status !== 'completed').map((i) => (
+          <div key={i.id || i._id} className="bg-red-600 p-5 rounded-[30px] text-white shadow-2xl animate-in fade-in slide-in-from-top border-b-4 border-black/20 relative overflow-hidden">
              <div className="absolute top-0 right-0 p-4 opacity-20"><i className="fas fa-exclamation-triangle text-4xl"></i></div>
              <p className="text-[8px] font-black uppercase tracking-widest opacity-70">🚨 Misi Prioritas Tinggi (Open Mission)</p>
              <h3 className="text-lg font-black uppercase italic mt-1 leading-tight">{i.title}</h3>
              <button 
                 onClick={() => { setTargetIncident(i); setShowDutyForm(true); }}
-                className="mt-4 bg-white text-red-600 px-6 py-2 rounded-full font-black text-[10px] uppercase shadow-lg active:scale-95 transition-all"
+                className="mt-4 bg-white text-red-600 px-6 py-2 rounded-full font-black text-[10px] uppercase shadow-lg active:scale-90 transition-all"
              >
                 Ambil Kesediaan Tugas
              </button>
@@ -150,67 +153,39 @@ const RelawanTactical = ({ user }) => {
 
         {/* --- TACTICAL MAP --- */}
         <section className="bg-white rounded-[40px] shadow-2xl border-[10px] border-white h-[350px] relative overflow-hidden">
-         {location && typeof location.lat === 'number' && typeof location.lng === 'number' ? (
-    <MapContainer 
-      center={[location.lat, location.lng]} 
-      zoom={12} 
-      className="h-full w-full" 
-      zoomControl={false}
-    >
-      <MapRefresher />
-      <LayersControl position="topright">
-        <LayersControl.BaseLayer checked name="Tactical">
-          <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}" />
-        </LayersControl.BaseLayer>
-        <LayersControl.Overlay checked name="Radar Hujan">
-          {radarTime && <TileLayer url={`https://tilecache.rainviewer.com/v2/radar/${radarTime}/256/{z}/{x}/{y}/2/1_1.png`} opacity={0.4} />}
-        </LayersControl.Overlay>
-      </LayersControl>
+          {location && typeof location.lat === 'number' && typeof location.lng === 'number' ? (
+            <MapContainer center={[location.lat, location.lng]} zoom={12} className="h-full w-full" zoomControl={false}>
+              <MapRefresher />
+              <LayersControl position="topright">
+                <LayersControl.BaseLayer checked name="Tactical"><TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}" /></LayersControl.BaseLayer>
+                <LayersControl.Overlay checked name="Radar Hujan">{radarTime && <TileLayer url={`https://tilecache.rainviewer.com/v2/radar/${radarTime}/256/{z}/{x}/{y}/2/1_1.png`} opacity={0.4} />}</LayersControl.Overlay>
+              </LayersControl>
 
-      {/* 2. Marker Posisi Relawan (GPS) */}
-      <CircleMarker 
-        center={[location.lat, location.lng]} 
-        radius={8} 
-        pathOptions={{fillColor: '#006432', color: 'white', weight: 3, fillOpacity: 1}} 
-      />
+              <CircleMarker center={[location.lat, location.lng]} radius={8} pathOptions={{fillColor: '#006432', color: 'white', weight: 3, fillOpacity: 1}} />
 
-      {/* 3. Marker Kejadian (Data Map) */}
-      {data && data.map(inc => {
-        const lat = parseFloat(inc.latitude);
-        const lng = parseFloat(inc.longitude);
+              {data.map((inc) => {
+                const lat = parseFloat(inc.latitude);
+                const lng = parseFloat(inc.longitude);
+                if (isNaN(lat) || isNaN(lng)) return null;
 
-        // VALIDASI KETAT: Jika koordinat bukan angka, jangan render marker ini
-        if (isNaN(lat) || isNaN(lng)) return null;
-
-        return (
-          <CircleMarker 
-          key={inc.id || inc._id}  
-            center={[lat, lng]} 
-            radius={12} 
-            pathOptions={{ 
-              fillColor: inc.priority_level === 'CRITICAL' ? '#ef4444' : '#3b82f6', 
-              color: 'white', 
-              weight: 4, 
-              fillOpacity: 0.85 
-            }}
-          >
-            <Popup className="premium-popup">
-               <div className="p-1 font-sans">
-                  <h4 className="font-black text-nu-green uppercase text-[10px] mb-2">{inc.title}</h4>
-                  <button onClick={() => window.open(`https://www.google.com/maps?q=${lat},${lng}`)} className="w-full bg-slate-100 py-2 rounded-lg text-[8px] font-black uppercase">Buka Navigasi</button>
-               </div>
-            </Popup>
-          </CircleMarker>
-        );
-      })}
-    </MapContainer>
-  ) : (
-    // Tampilan Loading jika GPS belum siap
-    <div className="h-full w-full flex items-center justify-center bg-slate-50 text-[10px] font-black uppercase text-slate-400">
-       <i className="fas fa-spinner fa-spin mr-2"></i> Mengunci Sinyal GPS...
-    </div>
-  )}
-</section>
+                return (
+                  <CircleMarker key={inc.id || inc._id} center={[lat, lng]} radius={12} pathOptions={{ fillColor: inc.priority_level === 'CRITICAL' ? '#ef4444' : '#3b82f6', color: 'white', weight: 4, fillOpacity: 0.85 }}>
+                    <Popup className="premium-popup">
+                       <div className="p-1 font-sans">
+                          <h4 className="font-black text-nu-green uppercase text-[10px] mb-2">{inc.title}</h4>
+                          <button onClick={() => window.open(`https://www.google.com/maps?q=${lat},${lng}`)} className="w-full bg-slate-100 py-2 rounded-lg text-[8px] font-black uppercase">Buka Navigasi</button>
+                       </div>
+                    </Popup>
+                  </CircleMarker>
+                );
+              })}
+            </MapContainer>
+          ) : (
+            <div className="h-full w-full flex items-center justify-center bg-slate-50 text-[10px] font-black uppercase text-slate-400">
+               <i className="fas fa-spinner fa-spin mr-2"></i> Mengunci Sinyal GPS...
+            </div>
+          )}
+        </section>
 
         {/* --- MISSION MANAGER & FEED --- */}
         <div className="grid grid-cols-1 gap-6">
@@ -218,10 +193,10 @@ const RelawanTactical = ({ user }) => {
               <div className="absolute top-0 right-0 p-8 opacity-5"><i className="fas fa-rss text-9xl"></i></div>
               <h3 className="text-sm font-black uppercase italic mb-6 border-b border-white/10 pb-2">Wilayah Respon: {user.region}</h3>
               <div className="flex-1 overflow-y-auto space-y-6 custom-scrollbar pr-2 relative z-10">
-                 {data.length > 0 ? data.map(inc => (
-                    <div key={inc.id} className="relative border-l-2 border-white/20 pl-5 group active:scale-95 transition-all">
+                 {data.length > 0 ? data.map((inc) => (
+                    <div key={inc.id || inc._id} className="relative border-l-2 border-white/20 pl-5 group active:scale-95 transition-all">
                        <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-nu-gold border-4 border-nu-green"></div>
-                       <p className="text-[8px] font-bold text-white/50 uppercase">{new Date(inc.updated_at).toLocaleTimeString()}</p>
+                       <p className="text-[8px] font-bold text-white/50 uppercase">{new Date(inc.updated_at || inc.createdAt).toLocaleTimeString()}</p>
                        <h4 className="text-xs font-bold uppercase leading-tight">{inc.title}</h4>
                        <div className="flex gap-2 mt-2">
                           <span className="text-[7px] text-nu-gold font-black uppercase bg-white/10 px-2 py-0.5 rounded-full">{inc.status}</span>
@@ -235,8 +210,8 @@ const RelawanTactical = ({ user }) => {
 
       </main>
 
-      {/* --- FORM KESEDIAAN (MODAL OVERLAY) --- */}
-      {showDutyForm && (
+      {/* --- FORM KESEDIAAN --- */}
+      {showDutyForm && targetIncident && (
         <div className="fixed inset-0 z-[3000] bg-black/60 backdrop-blur-md p-6 flex items-end">
            <div className="w-full bg-white rounded-[40px] shadow-2xl p-8 animate-in slide-in-from-bottom duration-500">
               <div className="flex justify-between items-center mb-6">
