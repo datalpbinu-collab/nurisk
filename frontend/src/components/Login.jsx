@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import api from '../services/api';
+import { Preferences } from '@capacitor/preferences'; // Tambahan untuk stabilitas APK
 
 const Login = ({ onLoginSuccess, onGoToRegister }) => {
   const [form, setForm] = useState({ username: '', password: '' });
@@ -9,14 +10,25 @@ const Login = ({ onLoginSuccess, onGoToRegister }) => {
     e.preventDefault();
     setLoading(true);
     try {
+      // Menembak ke API (URL sudah otomatis dari api.js)
       const res = await api.post('/api/auth/login', form);
+      
       if (res.data.success) {
+        // SIMPAN KE LOCALSTORAGE (Untuk Web)
         localStorage.setItem('userData', JSON.stringify(res.data.user));
         localStorage.setItem('isLoggedIn', 'true');
+        localStorage.setItem('userToken', res.data.token);
+
+        // SIMPAN KE PREFERENCES (Untuk APK agar tidak gampang Logout)
+        await Preferences.set({ key: 'userData', value: JSON.stringify(res.data.user) });
+        await Preferences.set({ key: 'isLoggedIn', value: 'true' });
+        await Preferences.set({ key: 'userToken', value: res.data.token });
+
         onLoginSuccess(res.data.user);
       }
     } catch (err) {
-      alert(err.response?.data?.error || "Gagal Login");
+      // Menampilkan error asli dari backend
+      alert(err.response?.data?.error || "Gagal Login. Cek Koneksi Internet.");
     } finally {
       setLoading(false);
     }
@@ -32,11 +44,22 @@ const Login = ({ onLoginSuccess, onGoToRegister }) => {
         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.3em] mt-2 mb-10">Command Center NU Peduli Jateng</p>
 
         <form onSubmit={handleLogin} className="space-y-4">
-          <input className="w-full p-4 bg-slate-50 rounded-2xl text-sm border-none shadow-inner focus:ring-2 ring-nu-green transition-all font-bold" placeholder="Username" required
-            onChange={e => setForm({...form, username: e.target.value})} />
+          <input 
+            className="w-full p-4 bg-slate-50 rounded-2xl text-sm border-none shadow-inner focus:ring-2 ring-[#006432] transition-all font-bold" 
+            placeholder="Username" 
+            required
+            value={form.username}
+            onChange={e => setForm({...form, username: e.target.value})} 
+          />
           
-          <input type="password" className="w-full p-4 bg-slate-50 rounded-2xl text-sm border-none shadow-inner focus:ring-2 ring-nu-green transition-all font-bold" placeholder="Password" required
-            onChange={e => setForm({...form, password: e.target.value})} />
+          <input 
+            type="password" 
+            className="w-full p-4 bg-slate-50 rounded-2xl text-sm border-none shadow-inner focus:ring-2 ring-[#006432] transition-all font-bold" 
+            placeholder="Password" 
+            required
+            value={form.password}
+            onChange={e => setForm({...form, password: e.target.value})} 
+          />
           
           <button type="submit" disabled={loading} className="w-full bg-[#006432] text-white font-black py-5 rounded-3xl shadow-xl hover:bg-green-800 transition-all uppercase tracking-widest text-xs mt-4">
             {loading ? 'Authenticating...' : 'Authorize Login'}
@@ -46,8 +69,8 @@ const Login = ({ onLoginSuccess, onGoToRegister }) => {
         <div className="mt-8 pt-6 border-t border-slate-50">
            <p className="text-[10px] text-slate-400 font-bold uppercase mb-4">Masyarakat Umum & Relawan Baru?</p>
            <div className="grid grid-cols-2 gap-3">
-              <button onClick={onGoToRegister} className="bg-white border-2 border-nu-green text-nu-green py-3 rounded-2xl font-black text-[9px] uppercase tracking-widest hover:bg-green-50 transition-all">Daftar Admin</button>
-              <button onClick={() => window.location.pathname = '/lapor'} className="bg-red-600 text-white py-3 rounded-2xl font-black text-[9px] uppercase tracking-widest shadow-lg shadow-red-100 italic">🚨 Lapor Darurat</button>
+              <button type="button" onClick={onGoToRegister} className="bg-white border-2 border-[#006432] text-[#006432] py-3 rounded-2xl font-black text-[9px] uppercase tracking-widest hover:bg-green-50 transition-all">Daftar Admin</button>
+              <button type="button" onClick={() => window.location.pathname = '/lapor'} className="bg-red-600 text-white py-3 rounded-2xl font-black text-[9px] uppercase tracking-widest shadow-lg shadow-red-100 italic">🚨 Lapor Darurat</button>
            </div>
         </div>
       </div>

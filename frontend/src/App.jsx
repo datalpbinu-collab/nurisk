@@ -185,11 +185,16 @@ function App() {
       await StatusBar.setBackgroundColor({ color: '#006432' });
 
       Geolocation.watchPosition({ enableHighAccuracy: true, timeout: 10000 }, (pos) => {
-        if (pos) {
-          setCurrentCoords(pos.coords);
-          updateWeather(pos.coords.latitude, pos.coords.longitude);
-        }
-      });
+  if (pos) {
+    // Pastikan formatnya sesuai dengan yang dibaca komponen Peta (lat & lng)
+    const coords = {
+      lat: pos.coords.latitude,
+      lng: pos.coords.longitude
+    };
+    setCurrentCoords(coords);
+    updateWeather(coords.lat, coords.lng);
+  }
+});
 
       Network.addListener('networkStatusChange', status => {
         setIsOnline(status.connected);

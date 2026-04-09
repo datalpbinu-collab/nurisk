@@ -16,10 +16,15 @@ const MapRefresher = () => {
 const HeatmapLayer = ({ incidents }) => {
   const map = useMap();
   useEffect(() => {
-    if (!incidents.length) return;
-    const points = incidents.map(i => [parseFloat(i.latitude), parseFloat(i.longitude), 0.7]);
-    const heat = L.heatLayer(points, { radius: 25, blur: 15 }).addTo(map);
-    return () => map.removeLayer(heat);
+    if (!incidents || !incidents.length) return;
+    const points = incidents
+      .filter(i => i.latitude && i.longitude && !isNaN(parseFloat(i.latitude)))
+      .map(i => [parseFloat(i.latitude), parseFloat(i.longitude), 0.7]);
+
+    if (points.length > 0) {
+      const heat = L.heatLayer(points, { radius: 25, blur: 15 }).addTo(map);
+      return () => map.removeLayer(heat);
+    }
   }, [incidents, map]);
   return null;
 };
@@ -151,19 +156,38 @@ const RelawanTactical = ({ user }) => {
               <LayersControl.BaseLayer checked name="Tactical"><TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}" /></LayersControl.BaseLayer>
               <LayersControl.Overlay checked name="Radar Hujan">{radarTime && <TileLayer url={`https://tilecache.rainviewer.com/v2/radar/${radarTime}/256/{z}/{x}/{y}/2/1_1.png`} opacity={0.4} />}</LayersControl.Overlay>
             </LayersControl>
-
+{location && location.lat && location.lng && (
             <CircleMarker center={[location.lat, location.lng]} radius={8} pathOptions={{fillColor: '#006432', color: 'white', weight: 3, fillOpacity: 1}} />
+)}
+            {data.map(inc => {
+  // VALIDASI: Cek apakah koordinat tersedia
+  const lat = parseFloat(inc.latitude);
+  const lng = parseFloat(inc.longitude);
 
-            {data.map(inc => (
-              <CircleMarker key={inc.id} center={[inc.latitude, inc.longitude]} radius={12} pathOptions={{ fillColor: inc.priority_level === 'CRITICAL' ? '#ef4444' : '#3b82f6', color: 'white', weight: 4, fillOpacity: 0.85 }}>
-                <Popup className="premium-popup">
-                   <div className="p-1 font-sans">
-                      <h4 className="font-black text-nu-green uppercase text-[10px] mb-2">{inc.title}</h4>
-                      <button onClick={() => window.open(`https://www.google.com/maps?q=${inc.latitude},${inc.longitude}`)} className="w-full bg-slate-100 py-2 rounded-lg text-[8px] font-black uppercase">Buka Navigasi</button>
-                   </div>
-                </Popup>
-              </CircleMarker>
-            ))}
+  if (isNaN(lat) || isNaN(lng)) return null; // Jangan render jika koordinat rusak
+
+  return (
+    <CircleMarker 
+      key={inc.id} 
+      center={[lat, lng]} // Gunakan variabel yang sudah di-parse
+      radius={12} 
+      pathOptions={{ 
+        fillColor: inc.priority_level === 'CRITICAL' ? '#ef4444' : '#3b82f6', 
+        color: 'white', 
+        weight: 4, 
+        fillOpacity: 0.85 
+      }}
+    >
+      <Popup className="premium-popup">
+         <div className="p-1 font-sans">
+            <h4 className="font-black text-nu-green uppercase text-[10px] mb-2">{inc.title}</h4>
+            <button onClick={() => window.open(`https://www.google.com/maps?q=${lat},${lng}`)} className="w-full bg-slate-100 py-2 rounded-lg text-[8px] font-black uppercase">Buka Navigasi</button>
+         </div>
+      </Popup>
+    </CircleMarker>
+  );
+})}
+            
           </MapContainer>
         </section>
 

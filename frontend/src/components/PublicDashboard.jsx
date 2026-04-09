@@ -195,10 +195,10 @@ const PublicDashboard = () => {
     const fetchAllData = async () => {
       try {
         const [resInc, resInv, resRadar, resNews] = await Promise.all([
-          axios.get('http://localhost:5000/api/incidents/public'),
-          axios.get('http://localhost:5000/api/inventory'),
+          axios.get('https://nupeduli-pusdatin-nu-backend.hf.space/api/incidents/public'),
+          axios.get('https://nupeduli-pusdatin-nu-backend.hf.space/api/inventory'),
           axios.get('https://api.rainviewer.com/public/weather-maps.json'),
-          axios.get('http://localhost:5000/api/news').catch(() => ({ data: [] }))
+          axios.get('https://nupeduli-pusdatin-nu-backend.hf.space/api/news').catch(() => ({ data: [] }))
         ]);
         setData(resInc.data);
         setInventory(resInv.data);

@@ -1,3 +1,3 @@
 const api = axios.create({
-  baseURL: "http://localhost:5000" 
+  baseURL: "https://nupeduli-pusdatin-nu-backend.hf.space" 
 });
