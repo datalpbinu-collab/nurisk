@@ -185,11 +185,11 @@ function App() {
       await StatusBar.setBackgroundColor({ color: '#006432' });
 
       Geolocation.watchPosition({ enableHighAccuracy: true, timeout: 10000 }, (pos) => {
-  if (pos) {
+  if (pos && pos.coords) {
     // Pastikan formatnya sesuai dengan yang dibaca komponen Peta (lat & lng)
     const coords = {
-      lat: pos.coords.latitude,
-      lng: pos.coords.longitude
+      lat: pos.coords.latitude || -7.15,
+      lng: pos.coords.longitude || 110.14
     };
     setCurrentCoords(coords);
     updateWeather(coords.lat, coords.lng);

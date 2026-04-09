@@ -23,7 +23,7 @@ const HeatmapLayer = ({ incidents }) => {
 
     if (points.length > 0) {
       const heat = L.heatLayer(points, { radius: 25, blur: 15 }).addTo(map);
-      return () => map.removeLayer(heat);
+      return () => { if (map && heat) map.removeLayer(heat); };
     }
   }, [incidents, map]);
   return null;
@@ -184,7 +184,7 @@ const RelawanTactical = ({ user }) => {
 
         return (
           <CircleMarker 
-            key={inc.id} 
+          key={inc.id || inc._id}  
             center={[lat, lng]} 
             radius={12} 
             pathOptions={{ 
