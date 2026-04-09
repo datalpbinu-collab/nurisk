@@ -275,7 +275,12 @@ function App() {
   if (!isLoggedIn) {
     return <div className="h-screen w-screen relative bg-white">
       <PublicDashboard incidents={incidents} />
-      <button onClick={() => window.location.href = '/login'} className="fixed bottom-10 right-10 z-[2500] bg-[#006432] text-white p-5 rounded-full shadow-2xl animate-bounce border-4 border-white"><i className="fas fa-user-shield text-xl"></i></button>
+      <button 
+  onClick={() => setShowLogin(true)} 
+  className="fixed bottom-10 right-10 z-[2500] bg-[#006432] ..."
+>
+  <i className="fas fa-user-shield text-xl"></i>
+</button>
       <Login onLogin={handleLogin} />
     </div>;
   }
