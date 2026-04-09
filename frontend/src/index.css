@@ -1,47 +1,27 @@
-/* --- 1. TAILWIND CORE (V4 STANDARDS) --- */
-@import "tailwindcss";
+/* --- 1. TAILWIND CORE (V3 STANDARDS) --- */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/* --- 2. THEME CONFIGURATION (V4 STYLE) --- */
-@theme {
-  /* Mendaftarkan warna agar bisa dipakai sebagai class: text-nu-green, bg-nu-gold, dll */
-  --color-nu-green: #006432;
-  --color-nu-gold: #c5a059;
-  
-  /* Animasi Kustom */
-  --animate-marquee: marquee 40s linear infinite;
-  --animate-fade-in: fadeIn 0.4s ease-out forwards;
-  --animate-slide-in: slide-in-bottom 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-
-  @keyframes marquee {
-    0% { transform: translateX(0); }
-    100% { transform: translateX(-50%); }
-  }
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes slide-in-bottom {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
-  }
-}
-
-/* --- 3. GLOBAL VARIABLES & NATIVE CONFIG --- */
+/* --- 2. GLOBAL VARIABLES & NATIVE CONFIG --- */
 :root {
+  --nu-green: #006432;
+  --nu-gold: #c5a059;
   --safe-top: env(safe-area-inset-top);
   --safe-bottom: env(safe-area-inset-bottom);
-  --header-height: 3.5rem;
-  --nav-height: 4rem;
+  --header-height: 3.5rem; /* 56px */
+  --nav-height: 4rem;    /* 64px */
 }
 
 /* Membuang perilaku browser agar terasa seperti APK Native */
 * {
-  -webkit-tap-highlight-color: transparent;
-  -webkit-touch-callout: none;
-  user-select: none;
+  -webkit-tap-highlight-color: transparent; /* Hapus kotak abu-abu saat klik */
+  -webkit-touch-callout: none;              /* Hapus menu copy-paste pada gambar/link */
+  user-select: none;                        /* Cegah seleksi teks global */
   box-sizing: border-box;
 }
 
+/* Izinkan seleksi teks hanya pada input dan area tulisan penting */
 input, textarea, [contenteditable="true"], .selectable-text {
   user-select: text !important;
   -webkit-user-select: text !important;
@@ -54,6 +34,7 @@ html, body, #root {
   padding: 0;
   background-color: #f8fafc;
   font-family: 'Inter', -apple-system, sans-serif;
+  /* Cegah browser "memantul" atau Pull-to-Refresh yang mengganggu di APK */
   overscroll-behavior-y: none; 
   overflow: hidden; 
 }
@@ -62,7 +43,9 @@ html, body, #root {
 html { font-size: 14px; }
 @media (min-width: 768px) { html { font-size: 16px; } }
 
-/* --- 4. LAYOUT STRUCTURE --- */
+/* --- 3. LAYOUT STRUCTURE (STUCK NAVIGATION) --- */
+
+/* Container Utama */
 .app-container {
   display: flex;
   flex-direction: column;
@@ -70,23 +53,36 @@ html { font-size: 14px; }
   width: 100vw;
 }
 
+/* Area Konten Tengah yang bisa di-scroll */
 main {
   flex: 1;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  -webkit-overflow-scrolling: touch; /* Scroll halus di iPhone/Android */
   position: relative;
+  /* Memberi ruang agar tidak tertutup Bottom Nav */
   padding-bottom: var(--nav-height); 
 }
 
-/* --- 5. CUSTOM UTILITIES --- */
+/* --- 4. MOBILE NATIVE OPTIMIZATION --- */
+.safe-area-inset { padding-top: var(--safe-top); }
+.pb-safe { padding-bottom: var(--safe-bottom); }
+.pt-safe { padding-top: var(--safe-top); }
+
+.scrolling-touch {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Custom Scrollbar (Sangat Halus & Minimalis) */
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: #e2e8f0;
   border-radius: 10px;
 }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #006432; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--nu-green); }
 
+/* --- 5. MAP & HUD CONFIG --- */
 .leaflet-container {
   height: 100% !important;
   width: 100% !important;
@@ -94,12 +90,31 @@ main {
   z-index: 1;
 }
 
+/* Marker Glow untuk Prioritas Kritis */
+.marker-glow {
+  filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.8));
+}
+
+/* --- 6. GLASSMORPHISM & SHADOWS --- */
 .glass-panel {
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.5);
 }
+
+.glass-ui {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.premium-shadow {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+}
+
+/* --- 7. ANIMASI TAKTIS (PULSE, SLIDE, MARQUEE) --- */
 
 /* Pulse Ring untuk Marker Map */
 @keyframes pulse-ring {
@@ -122,4 +137,52 @@ main {
   border-radius: 50%;
   background-color: inherit;
   animation: pulse-ring 1.5s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+}
+
+/* Slide-In dari Bawah (Untuk Overlay Mobile) */
+@keyframes slide-in-bottom {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.animate-in {
+  animation: slide-in-bottom 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Slide-In dari Kanan (Untuk Desktop Sidebar) */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.animate-slide-right {
+  animation: slide-in-right 0.4s ease-out forwards;
+}
+
+/* Marquee (Running Text Log) */
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  display: inline-block;
+  white-space: nowrap;
+  animation: marquee 40s linear infinite;
+}
+
+/* Nav Scaling Effect */
+.active-nav-scale {
+  transform: scale(1.1);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Efek Fade In Halus untuk Dashboard */
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }

@@ -18,5 +18,6 @@ app.use('/api/incidents', incidentRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/news', newsRoutes);
 app.use('/api/logistics', logisticsRoutes); // Pintu untuk Request Bantuan
+app.get('/api/incidents/public', incidentController.getIncidents);
 
 module.exports = app;
