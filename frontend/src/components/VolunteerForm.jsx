@@ -28,7 +28,7 @@ const VolunteerForm = ({ onBack }) => {
 
   const submit = async () => {
     try {
-      await api.post('/api/inventory/volunteers', form);
+      await api.post('inventory/volunteers', form);
       alert("Relawan Berhasil Didata!");
       onBack();
     } catch (e) { alert("Gagal Simpan"); }

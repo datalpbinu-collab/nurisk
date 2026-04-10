@@ -10,7 +10,7 @@ const Login = ({ onLoginSuccess, onGoToRegister, onClose }) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await api.post('/api/login', form);
+      const res = await api.post('login', form);
       
       if (res.data.success) {
         localStorage.setItem('userData', JSON.stringify(res.data.user));
@@ -24,7 +24,16 @@ const Login = ({ onLoginSuccess, onGoToRegister, onClose }) => {
         onLoginSuccess(res.data.user);
       }
     } catch (err) {
-      alert(err.response?.data?.error || "Gagal Login. Cek Koneksi Internet.");
+      console.error("Login Error:", err);
+      let errorMsg = "Gagal Login. Cek Koneksi Internet.";
+      if (err.response) {
+        errorMsg = err.response.data?.error || "Login Gagal. Cek kembali Akun Anda.";
+      } else if (err.request) {
+        errorMsg = "Login Gagal. Tidak ada respon dari server. Cek koneksi.";
+      } else {
+        errorMsg = "Login Gagal. Kesalahan sistem: " + err.message;
+      }
+      alert(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -42,7 +51,7 @@ const Login = ({ onLoginSuccess, onGoToRegister, onClose }) => {
         
         <div className="absolute top-0 right-0 p-8 opacity-5"><i className="fas fa-shield-alt text-8xl"></i></div>
         
-        <img src="https://upload.wikimedia.org/wikipedia/id/thumb/a/a2/Logo_Nahdlatul_Ulama.svg/1200px-Logo_Nahdlatul_Ulama.svg.png" className="h-20 mx-auto mb-6" alt="NU" />
+        <img src="https://pwnu-jateng.org/uploads/infoumum/20250825111304-2025-08-25infoumum111252.png" className="h-20 mx-auto mb-6" alt="NU" />
         <h2 className="text-2xl font-black text-[#006432] uppercase italic tracking-tighter leading-none">Pusdatin Access</h2>
         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.3em] mt-2 mb-10">Command Center NU Peduli Jateng</p>
 

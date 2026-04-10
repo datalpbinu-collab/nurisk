@@ -11,7 +11,7 @@ const Register = ({ onBackToLogin }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/api/auth/register', form);
+      await api.post('auth/register', form);
       alert("Registrasi Berhasil! Role: " + form.role);
       onBackToLogin();
     } catch (err) {

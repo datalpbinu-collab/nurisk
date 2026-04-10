@@ -26,7 +26,7 @@ const BASE_URL = 'https://nupeduli-pusdatin-nu-backend.hf.space';
 const socket = io(BASE_URL, { 
   reconnection: true, 
   reconnectionAttempts: Infinity,
-  transports: ['websocket'] 
+  transports: ['polling', 'websocket'] 
 });
 
 function App() {

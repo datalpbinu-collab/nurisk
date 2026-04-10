@@ -17,7 +17,7 @@ const VolunteerRegister = () => {
     setLoading(true);
     setMessage('');
     try {
-      const res = await api.post('/api/register', form);
+      const res = await api.post('register', form);
       if (res.data.success) {
         setMessage('Berhasil Daftar! Silakan Login.');
         setTimeout(() => {
@@ -25,7 +25,14 @@ const VolunteerRegister = () => {
         }, 2000);
       }
     } catch (err) {
-      setMessage(err.response?.data?.error || "Gagal Daftar. Cek Koneksi.");
+      console.error("Register Error:", err);
+      if (err.response) {
+        setMessage(err.response.data?.error || "Gagal Daftar. Server merespon dengan error.");
+      } else if (err.request) {
+        setMessage("Gagal Daftar. Tidak ada respon dari server. Cek apakah backend sudah jalan.");
+      } else {
+        setMessage("Gagal Daftar. Terjadi kesalahan sistem: " + err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -35,7 +42,7 @@ const VolunteerRegister = () => {
     <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-6 font-sans">
       <div className="bg-white w-full max-w-md p-10 rounded-[40px] shadow-2xl border-t-[10px] border-[#006432]">
         <div className="text-center mb-8">
-          <img src="https://upload.wikimedia.org/wikipedia/id/thumb/a/a2/Logo_Nahdlatul_Ulama.svg/1200px-Logo_Nahdlatul_Ulama.svg.png" className="h-16 mx-auto mb-4" alt="NU" />
+          <img src="https://pwnu-jateng.org/uploads/infoumum/20250825111304-2025-08-25infoumum111252.png" className="h-16 mx-auto mb-4" alt="NU" />
           <h2 className="text-2xl font-black text-[#006432] uppercase italic tracking-tighter">Daftar Akun</h2>
           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Pusdatin NU Peduli Jawa Tengah</p>
         </div>
