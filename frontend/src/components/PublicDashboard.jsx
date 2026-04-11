@@ -246,11 +246,12 @@ const PublicDashboard = ({ incidents, onOpenLogin }) => {
         {activeView === 'home' ? (
           <>
             <div className="grid grid-cols-4 gap-4">
-               <KPIBox label="Misi" value={data.length} color="text-red-600" icon="fire-extinguisher" />
-               <KPIBox label="Jiwa" value={stats.terdampak} color="text-blue-600" icon="users" />
-               <KPIBox label="Relawan" value={inventory.filter(i=>i.type==='Relawan').length || 142} color="text-green-600" icon="user-shield" />
-               <KPIBox label="Aset" value="24" color="text-[#c5a059]" icon="box-open" />
-            </div>
+   {/* Gunakan ?.length dan || 0 agar jika data undefined, aplikasi tidak crash */}
+   <KPIBox label="Misi" value={data?.length || 0} color="text-red-600" icon="fire-extinguisher" />
+   <KPIBox label="Jiwa" value={stats?.terdampak || 0} color="text-blue-600" icon="users" />
+   <KPIBox label="Relawan" value={inventory?.filter(i=>i.type==='Relawan')?.length || 142} color="text-green-600" icon="user-shield" />
+   <KPIBox label="Aset" value="24" color="text-[#c5a059]" icon="box-open" />
+</div>
 
             <div className="bento-card p-6">
               <WeatherForecast />
@@ -293,41 +294,18 @@ const PublicDashboard = ({ incidents, onOpenLogin }) => {
                    </h3>
 {/* --- MISSION PROGRESS FEED --- */}
 <div className="flex-1 overflow-y-auto space-y-8 custom-scrollbar pr-2">
-  {data.map((inc) => {
-    // Menentukan tanggal yang akan dipakai (createdAt sebagai utama, updated_at sebagai cadangan)
-    const eventDate = inc.createdAt || inc.updated_at;
+  {/* Tambahkan ?. sebelum map agar jika data belum ada, tidak crash */}
+  {data?.length > 0 ? data.map((inc) => (
+    <div key={inc.id || inc._id} className="relative pl-6 border-l border-white/10 pb-2 group cursor-default">
+       <div className="absolute -left-[4.5px] top-0 w-2 h-2 rounded-full bg-[#c5a059]"></div>
+       <p className="text-[9px] font-bold text-white/50 uppercase leading-none">
+         {inc.createdAt ? new Date(inc.createdAt).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).replace('.',':') : '--:--'}
+       </p>
+       <h4 className="text-sm font-bold mt-1">{inc.title || "Tanpa Judul"}</h4>
+       <span className="text-[8px] font-black bg-white/10 px-2 py-0.5 rounded-md uppercase mt-2 inline-block">{inc.status}</span>
     
-    return (
-      <div key={inc.id || inc._id} className="relative pl-6 border-l border-white/10 pb-2 group cursor-default">
-         <div className="absolute -left-[4.5px] top-0 w-2 h-2 rounded-full bg-[#c5a059] shadow-[0_0_10px_#c5a059] group-hover:scale-125 transition-transform"></div>
-         
-         {/* TANGGAL DAN WAKTU (SUDAH DIPERBAIKI) */}
-         <p className="text-[9px] font-bold text-white/50 uppercase leading-none tracking-tighter">
-           {eventDate 
-             ? new Date(eventDate).toLocaleString('id-ID', { 
-                 day: '2-digit', 
-                 month: 'short', 
-                 hour: '2-digit', 
-                 minute: '2-digit' 
-               }).replace('.', ':') 
-             : 'JAM PENDING'}
-         </p>
-
-         <h4 className="text-sm font-bold mt-1 group-hover:text-[#c5a059] transition-colors leading-tight">
-           {inc.title}
-         </h4>
-         
-         <div className="mt-2 flex items-center gap-2">
-           <span className="text-[8px] font-black bg-white/10 px-2 py-0.5 rounded-md uppercase">
-             {inc.status}
-           </span>
-           <span className="text-[7px] font-bold text-white/30 uppercase italic">
-             {inc.region}
-           </span>
-         </div>
-      </div>
-    );
-  })}
+    </div>
+        )) : <p className="text-white/20 text-[10px] text-center py-20 uppercase font-black">Menunggu Data Satelit...</p>}
 </div>                 
             </div>
             </div>

@@ -70,18 +70,23 @@ function App() {
   }), []);
 
   const fetchData = useCallback(async () => {
-    try {
-      const [resInc, resInv] = await Promise.all([
-        api.get('incidents'), 
-        api.get('inventory')
-      ]);
-      setIncidents(resInc.data || []);
-      setInventory(resInv.data || []);
-    } catch (err) {
-      const cInc = await storage.get('cache_incidents');
-      if (cInc) setIncidents(cInc);
-    }
-  }, [storage]);
+  try {
+    const [resInc, resInv] = await Promise.all([
+      api.get('incidents'), 
+      api.get('inventory')
+    ]);
+    // PASTIKAN SELALU JADI ARRAY [] MESKIPUN DATA KOSONG
+    setIncidents(Array.isArray(resInc.data) ? resInc.data : []);
+    setInventory(Array.isArray(resInv.data) ? resInv.data : []);
+    
+    await storage.set('cache_incidents', resInc.data || []);
+    await storage.set('cache_inventory', resInv.data || []);
+  } catch (err) {
+    console.error("Fetch Error:", err);
+    const cInc = await storage.get('cache_incidents');
+    setIncidents(cInc || []);
+  }
+}, [storage]);
 
   const handleDataSubmit = async (endpoint, data) => {
     const cleanEndpoint = endpoint.replace('/api/', '');
@@ -145,7 +150,12 @@ function App() {
     return <RelawanTactical user={userData} coords={currentCoords} onOfflineSubmit={handleDataSubmit} onLogout={handleLogout} />;
   }
 
-  const filteredData = incidents.filter((inc) => userData.role === 'PWNU' || inc.region === userData.region);
+  const filteredData = useMemo(() => {
+  if (!Array.isArray(incidents)) return []; // Jika bukan array, jangan diproses
+  return incidents.filter((inc) => 
+    userData?.role === 'PWNU' || userData?.role === 'SUPER_ADMIN' || inc.region === userData?.region
+  );
+}, [incidents, userData]);
 
   return (
     <div className="h-screen w-screen flex flex-col bg-[#f8fafc] text-slate-800 overflow-hidden relative safe-area-inset">
