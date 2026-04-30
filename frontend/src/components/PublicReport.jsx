@@ -129,9 +129,7 @@ const PublicReport = ({ onBack }) => {
       formData.append('status', 'REPORTED');
       if (form.photo) formData.append('photo', form.photo);
 
-      await api.post('reports', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      await api.post('reports', formData);
 
       Haptics.impact({ style: ImpactStyle.Medium });
       alert("✓ LAPORAN TERKIRIM! Tim ICC NU Peduli sedang memverifikasi lokasi Anda.");

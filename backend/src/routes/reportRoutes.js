@@ -4,9 +4,7 @@ const path = require('path')
 const fs = require('fs')
 
 const reportController = require('../controllers/reportController')
-
-router.get('/', reportController.getReports)
-router.post('/', reportController.createReport)
+const incidentController = require('../controllers/incidentController')
 
 // --- MEDIA UPLOAD FOR INCIDENTS ---
 const multer = require('multer');
@@ -38,6 +36,11 @@ const upload = multer({
         cb(new Error('File type not allowed'));
     }
 });
+
+router.get('/', reportController.getReports)
+router.post('/', upload.single('photo'), incidentController.createIncident)
+
+
 
 router.post('/upload', upload.single('file'), async (req, res) => {
     try {

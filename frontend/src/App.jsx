@@ -40,15 +40,14 @@ import AdminDashboard from './components/AdminDashboard';
 
 
 // --- KONFIGURASI ENGINE ---
-// PENTING: GANTI URL DI BAWAH DENGAN NAMA SPACE HUGGING FACE ANDA YANG BARU
-const BASE_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:7860';
+const BASE_URL = import.meta.env.VITE_SOCKET_URL ||
+  (import.meta.env.PROD ? window.location.origin : 'http://localhost:7860');
 
 const socket = io(BASE_URL, {
   reconnection: true, 
-  reconnectionAttempts: Infinity,
-  transports: ['websocket'], 
-  upgrade: false, 
-  forceNew: true
+  reconnectionAttempts: 10,
+  transports: ['websocket', 'polling'], 
+  path: '/socket.io/',
 });
 
 function App() {
