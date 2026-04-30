@@ -301,7 +301,7 @@ const bootstrap = async () => {
       `);
     });
   } catch (err) {
-    console.error('❌ BOOTSTRAP FAILED:', err.message);
+    console.error('❌ BOOTSTRAP FAILED:', err.message || err.code || err);
     process.exit(1);
   }
 };
