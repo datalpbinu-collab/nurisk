@@ -1,3 +1,32 @@
-node_modules/
+# =============================================================
+#  .gitignore — Pusdatin NU Peduli Jateng (Backend)
+# =============================================================
+
+# WAJIB: Jangan pernah commit file ini ke Git
 .env
+.env.local
+.env.production
+.env.staging
+
+# Dependencies
+node_modules/
+npm-debug.log*
+
+# Build output
 dist/
+build/
+
+# Log files
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Upload sementara
+uploads/tmp/

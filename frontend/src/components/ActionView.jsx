@@ -20,7 +20,7 @@ const ActionView = ({ incident, onComplete }) => {
 
     try {
       for (const id of filled) {
-        await api.post('/api/incidents/actions', {
+        await api.post('incidents/actions', {
           incident_id: incident.id,
           kluster: klusterList.find(k => k.id === id).name,
           ...actions[id]
@@ -42,7 +42,7 @@ const ActionView = ({ incident, onComplete }) => {
       </div>
 
       <div className="flex-1 overflow-auto p-6 md:p-10">
-        <div className="bg-white rounded-[40px] shadow-2xl border border-slate-100 overflow-hidden">
+        <div className="bg-white rounded-[40px] shadow-2xl border border-slate-100 overflow-x-auto custom-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b">

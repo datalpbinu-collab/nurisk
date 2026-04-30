@@ -1,272 +1,409 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Popup, LayersControl, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet.heat';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import api from '../services/api';
-import axios from 'axios';
-import 'leaflet/dist/leaflet.css';
+import { normalizeStatus } from '../utils/constants';
+import PublicReport from './PublicReport';
+import NotificationPanel from './NotificationPanel';
+import MapDisplay from './MapDisplay';
+import VolunteerMissionDashboard from './VolunteerMissionDashboard';
+import { useNotificationStore } from '../store/useNotificationStore';
 
-// --- KOMPONEN PENDUKUNG ---
-const MapRefresher = () => {
-  const map = useMap();
-  useEffect(() => { 
-    const timer = setTimeout(() => map.invalidateSize(), 500); 
-    return () => clearTimeout(timer);
-  }, [map]);
-  return null;
-};
+const RelawanTactical = ({ user, onLogout, onOpenChat }) => {
+  const userRegion = user?.region || 'jateng';
+  const userId = user?.id;  
+  
+  const [incidents, setIncidents] = useState([]);
+  const [verifiedIncidents, setVerifiedIncidents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState('home');
+  const [selectedIncident, setSelectedIncident] = useState(null);
+  const [joiningMission, setJoiningMission] = useState(null);
+  
+  const { notifications, unreadCount, fetchNotifications, markAsRead } = useNotificationStore();
+  const mountedRef = useRef(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-const HeatmapLayer = ({ incidents }) => {
-  const map = useMap();
+  // Fetch notifications
   useEffect(() => {
-    if (!incidents || !incidents.length) return;
-    
-    // VALIDASI: Filter hanya koordinat yang benar-benar angka
-    const points = incidents
-      .filter(i => i.latitude && i.longitude && !isNaN(parseFloat(i.latitude)) && !isNaN(parseFloat(i.longitude)))
-      .map(i => [parseFloat(i.latitude), parseFloat(i.longitude), 0.7]);
+    if (userId) fetchNotifications(userId, user?.role);
+  }, [userId, user?.role]);
 
-    if (points.length > 0) {
-      // @ts-ignore
-      const heat = L.heatLayer(points, { radius: 25, blur: 15 }).addTo(map);
-      return () => {
-        if (map && heat) map.removeLayer(heat);
-      };
-    }
-  }, [incidents, map]);
-  return null;
-};
-
-const RelawanTactical = ({ user, coords, onOfflineSubmit, onLogout }) => {
-  // --- STATE CORE ---
-  const [data, setData] = useState([]);
-  const [radarTime, setRadarTime] = useState(null);
-  const [location, setLocation] = useState(coords || { lat: -7.15, lng: 110.14 });
-  const [gpsActive, setGpsActive] = useState(!!coords);
-  const [isOffline, setIsOffline] = useState(!navigator.onLine);
-
-  // --- STATE ORKESTRASI (WORKFLOW BARU) ---
-  const [showDutyForm, setShowDutyForm] = useState(false);
-  const [targetIncident, setTargetIncident] = useState(null);
-  const [availability, setAvailability] = useState({ from: '', until: '' });
-
-  // 1. DATA SYNC & PCNU FILTER
-  const fetchOps = async () => {
-    try {
-      const [resInc, resRadar] = await Promise.all([
-        api.get('incidents'),
-        axios.get('https://api.rainviewer.com/public/weather-maps.json'),
-      ]);
-      
-      const filtered = resInc.data.filter((i) => i.region === user.region || i.priority_level === 'CRITICAL');
-      setData(filtered);
-      setIsOffline(false);
-      localStorage.setItem(`cache_ops_${user.region}`, JSON.stringify(filtered));
-      if (resRadar.data.radar.past.length > 0) setRadarTime(resRadar.data.radar.past.pop().time);
-    } catch (e) {
-      setIsOffline(true);
-      const cached = localStorage.getItem(`cache_ops_${user.region}`);
-      if (cached) setData(JSON.parse(cached));
-    }
-  };
-
+  // Fetch incidents - verified only for relawan view
   useEffect(() => {
-    fetchOps();
-    const interval = setInterval(fetchOps, 30000);
-    return () => clearInterval(interval);
-  }, [user.region]);
+    mountedRef.current = true;
+    setLoading(true);
+    setError(null);
 
-  // 2. UPDATE LOCATION FROM PROPS
-  useEffect(() => {
-    if (coords) {
-      setLocation(coords);
-      setGpsActive(true);
-    }
-  }, [coords]);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-  // 3. LOGIKA AMBIL KESEDIAAN (APPLY DUTY)
-  const handleApplyDuty = async () => {
-    if (!availability.from || !availability.until) return alert("Pilih rentang waktu kesediaan Anda!");
-    try {
-      await api.post('volunteers/apply', {
-        volunteer_id: user.id,
-        incident_id: targetIncident.id,
-        available_from: availability.from,
-        available_until: availability.until,
-        note: "Siap diterjunkan"
-      });
-      alert("Kesediaan dikirim! Menunggu Approval PCNU/PWNU.");
-      setShowDutyForm(false);
-      fetchOps();
-    } catch (e) { alert("Gagal mengirim aplikasi tugas"); }
-  };
-
-  const stats = useMemo(() => ({
-    aktif: data.filter((i) => i.status !== 'completed').length,
-    critical: data.filter((i) => i.priority_level === 'CRITICAL').length,
-    jiwa: data.reduce((acc, curr) => acc + (parseInt(curr.dampak_manusia?.terdampak) || 0), 0)
-  }), [data]);
-
-  return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans overflow-x-hidden pb-32">
-      
-      {/* HEADER TACTICAL */}
-      <nav className="bg-[#006432] p-4 pt-12 border-b-4 border-[#c5a059] flex justify-between items-center shadow-xl sticky top-0 z-[1001]">
-        <div className="flex items-center gap-3">
-          <img src="https://pwnu-jateng.org/uploads/infoumum/20250825111304-2025-08-25infoumum111252.png" className="h-8 border border-white/20 rounded-full" alt="logo" />
-          <div className="leading-none">
-            <h1 className="text-sm font-black uppercase italic text-white leading-none">TRC {user.region}</h1>
-            <p className="text-[8px] font-bold text-green-200 uppercase tracking-widest mt-1">{user.full_name || user.name}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-           {isOffline && <i className="fas fa-wifi-slash text-red-400 text-xs animate-pulse"></i>}
-           <div className={`w-2.5 h-2.5 rounded-full ${gpsActive ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-red-500 animate-ping'}`}></div>
-           <i className="fas fa-power-off text-white/30 ml-2" onClick={onLogout}></i>
-        </div>
-      </nav>
-
-      <main className="max-w-7xl mx-auto p-4 space-y-6">
+    api.get('incidents/public', { signal: controller.signal })
+      .then(res => {
+        clearTimeout(timeoutId);
+        if (!mountedRef.current) return;
         
-        {/* KPI BENTO GRID */}
-        <div className="grid grid-cols-4 gap-2">
-           <KPIBox label="Misi" value={stats.aktif} color="text-red-600" />
-           <KPIBox label="Kritis" value={stats.critical} color="text-orange-500" />
-           <KPIBox label="Terdampak" value={stats.jiwa} color="text-blue-600" />
-           <KPIBox label="Zonasi" value={user.region} color="text-nu-green" isText />
+        const allData = Array.isArray(res.data) ? res.data : [];
+        // Filter for verified/assessed incidents in user region or critical
+        const verified = allData.filter(i => 
+          ['VERIFIED', 'ASSESSED', 'COMMANDED', 'ACTION'].includes(normalizeStatus(i.status)) &&
+          (String(i.region).toLowerCase() === String(userRegion).toLowerCase() || 
+           i.priority_level === 'CRITICAL')
+        );
+        
+        setIncidents(allData);
+        setVerifiedIncidents(verified);
+        setLoading(false);
+      })
+      .catch(e => {
+        clearTimeout(timeoutId);
+        if (mountedRef.current) {
+          setError(e.name === 'AbortError' ? 'Waktu tunggu habis' : 'Gagal memuat data');
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      mountedRef.current = false;
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [userRegion, refreshKey]);
+
+  const handleLogout = useCallback(() => {
+    onLogout?.();
+  }, [onLogout]);
+
+  const handleJoinMission = async (incidentId) => {
+    if (!userId) return alert('Login required');
+    setJoiningMission(incidentId);
+    
+    try {
+      // Use correct endpoint from volunteerRoutes.js
+      await api.post('/volunteers/deployments', {
+        incident_id: incidentId,
+        volunteer_id: userId,
+        status: 'pending',
+        available_from: new Date(),
+        note: 'Relawan mendaftar melalui aplikasi mobile'
+      });
+      alert('Berhasil mendaftar misi! Menunggu konfirmasi admin.');
+      setRefreshKey(prev => prev + 1);
+    } catch (err) {
+      console.error('Join mission error:', err);
+      alert(`Gagal mendaftar: ${err.response?.data?.error || err.message}`);
+    } finally {
+      setJoiningMission(null);
+    }
+  };
+
+  const handleNotificationRead = async (notifId) => {
+    await markAsRead(notifId, userId);
+  };
+
+  // Stats
+  const stats = useMemo(() => {
+    const active = verifiedIncidents.filter(i => 
+      !['COMPLETED', 'COMPLETED'].includes(normalizeStatus(i.status))
+    ).length;
+    const critical = verifiedIncidents.filter(i => i.priority_level === 'CRITICAL').length;
+    const myMissions = verifiedIncidents.filter(i => 
+      i.volunteers?.some(v => v.volunteer_id === userId)
+    ).length;
+    
+    return { active, critical, myMissions };
+  }, [verifiedIncidents, userId]);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-slate-50">
+        <div className="w-12 h-12 border-4 border-[#006432] border-t-transparent rounded-full animate-spin"></div>
+        <p className="mt-4 text-[#006432] font-bold">MEMUAT DATA...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col h-screen bg-slate-50 items-center justify-center p-4">
+        <p className="text-red-500 mb-4 text-center">{error}</p>
+        <button 
+          onClick={() => setRefreshKey(prev => prev + 1)} 
+          className="bg-[#006432] text-white px-6 py-3 rounded-lg font-bold"
+        >
+          <i className="fas fa-redo mr-2"></i>Muat Ulang
+        </button>
+      </div>
+    );
+  }
+
+  // Render tab content
+  if (activeTab === 'report') {
+    return <PublicReport onBack={() => setActiveTab('home')} />;
+  }
+
+  if (activeTab === 'notifications') {
+    return (
+      <NotificationPanel 
+        user={user} 
+        onClose={() => setActiveTab('home')} 
+      />
+    );
+  }
+
+  if (activeTab === 'missions') {
+    return <VolunteerMissionDashboard user={user} onBack={() => setActiveTab('home')} />;
+  }
+
+  if (activeTab === 'map') {
+    return (
+      <div className="h-screen bg-white">
+        <div className="h-14 bg-[#006432] px-4 flex items-center justify-between">
+          <button 
+            onClick={() => setActiveTab('home')}
+            className="text-white font-bold text-xs uppercase flex items-center gap-2"
+          >
+            <i className="fas fa-arrow-left"></i> Kembali
+          </button>
+          <h2 className="text-white font-black text-sm uppercase">Peta Bencana</h2>
+          <div className="w-8"></div>
         </div>
+        <div className="h-[calc(100vh-56px)]">
+          <MapDisplay incidents={verifiedIncidents} onSelect={setSelectedIncident} />
+        </div>
+      </div>
+    );
+  }
 
-        {/* --- URGENT BROADCAST --- */}
-        {data.filter((i) => i.priority_level === 'CRITICAL' && i.status !== 'completed').map((i) => (
-          <div key={i.id || i._id} className="bg-red-600 p-5 rounded-[30px] text-white shadow-2xl animate-in fade-in slide-in-from-top border-b-4 border-black/20 relative overflow-hidden">
-             <div className="absolute top-0 right-0 p-4 opacity-20"><i className="fas fa-exclamation-triangle text-4xl"></i></div>
-             <p className="text-[8px] font-black uppercase tracking-widest opacity-70">🚨 Misi Prioritas Tinggi (Open Mission)</p>
-             <h3 className="text-lg font-black uppercase italic mt-1 leading-tight">{i.title}</h3>
-             <button 
-                onClick={() => { setTargetIncident(i); setShowDutyForm(true); }}
-                className="mt-4 bg-white text-red-600 px-6 py-2 rounded-full font-black text-[10px] uppercase shadow-lg active:scale-90 transition-all"
-             >
-                Ambil Kesediaan Tugas
-             </button>
+  if (activeTab === 'mission' && selectedIncident) {
+    const inc = selectedIncident;
+    return (
+      <div className="h-screen bg-white overflow-y-auto">
+        <div className="h-14 bg-[#006432] px-4 flex items-center justify-between">
+          <button 
+            onClick={() => setActiveTab('home')}
+            className="text-white font-bold text-xs uppercase flex items-center gap-2"
+          >
+            <i className="fas fa-arrow-left"></i> Kembali
+          </button>
+          <h2 className="text-white font-black text-sm uppercase">Detail Misi</h2>
+          <div className="w-8"></div>
+        </div>
+        
+        <div className="p-4 space-y-4">
+          <div className="bg-white rounded-2xl shadow-lg p-4 border-l-4 border-[#006432]">
+            <h3 className="font-black text-lg text-slate-800">{inc.title}</h3>
+            <div className="flex gap-2 mt-2">
+              <span className="text-[10px] bg-green-100 text-green-700 px-2 py-1 rounded font-bold uppercase">
+                {inc.disaster_type}
+              </span>
+              <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded font-bold uppercase">
+                {inc.status}
+              </span>
+            </div>
           </div>
-        ))}
 
-        {/* --- TACTICAL MAP --- */}
-        <section className="bg-white rounded-[40px] shadow-2xl border-[10px] border-white h-[350px] relative overflow-hidden">
-          {location && typeof location.lat === 'number' && typeof location.lng === 'number' ? (
-            <MapContainer center={[location.lat, location.lng]} zoom={12} className="h-full w-full" zoomControl={false}>
-              <MapRefresher />
-              <LayersControl position="topright">
-                <LayersControl.BaseLayer checked name="Tactical"><TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}" /></LayersControl.BaseLayer>
-                <LayersControl.Overlay checked name="Radar Hujan">{radarTime && <TileLayer url={`https://tilecache.rainviewer.com/v2/radar/${radarTime}/256/{z}/{x}/{y}/2/1_1.png`} opacity={0.4} />}</LayersControl.Overlay>
-              </LayersControl>
+          <div className="bg-slate-50 rounded-2xl p-4">
+            <p className="text-xs font-bold text-slate-500 uppercase mb-2">Lokasi</p>
+            <p className="text-sm font-bold">{inc.region} - {inc.kecamatan || 'N/A'}</p>
+            {inc.latitude && inc.longitude && (
+              <p className="text-xs text-slate-400 mt-1">
+                {parseFloat(inc.latitude).toFixed(4)}, {parseFloat(inc.longitude).toFixed(4)}
+              </p>
+            )}
+          </div>
 
-              <CircleMarker center={[location.lat, location.lng]} radius={8} pathOptions={{fillColor: '#006432', color: 'white', weight: 3, fillOpacity: 1}} />
-
-              {data.map((inc) => {
-                const lat = parseFloat(inc.latitude);
-                const lng = parseFloat(inc.longitude);
-                if (isNaN(lat) || isNaN(lng)) return null;
-
-                return (
-                  <CircleMarker key={inc.id || inc._id} center={[lat, lng]} radius={12} pathOptions={{ fillColor: inc.priority_level === 'CRITICAL' ? '#ef4444' : '#3b82f6', color: 'white', weight: 4, fillOpacity: 0.85 }}>
-                    <Popup className="premium-popup">
-                       <div className="p-1 font-sans">
-                          <h4 className="font-black text-nu-green uppercase text-[10px] mb-2">{inc.title}</h4>
-                          <button onClick={() => window.open(`https://www.google.com/maps?q=${lat},${lng}`)} className="w-full bg-slate-100 py-2 rounded-lg text-[8px] font-black uppercase">Buka Navigasi</button>
-                       </div>
-                    </Popup>
-                  </CircleMarker>
-                );
-              })}
-            </MapContainer>
-          ) : (
-            <div className="h-full w-full flex items-center justify-center bg-slate-50 text-[10px] font-black uppercase text-slate-400">
-               <i className="fas fa-spinner fa-spin mr-2"></i> Mengunci Sinyal GPS...
+          {inc.description && (
+            <div className="bg-slate-50 rounded-2xl p-4">
+              <p className="text-xs font-bold text-slate-500 uppercase mb-2">Deskripsi</p>
+              <p className="text-sm text-slate-700">{inc.description}</p>
             </div>
           )}
-        </section>
 
-        {/* --- MISSION MANAGER & FEED --- */}
-        <div className="grid grid-cols-1 gap-6">
-           <div className="bg-[#006432] p-8 rounded-[45px] shadow-xl text-white h-[400px] flex flex-col overflow-hidden relative">
-              <div className="absolute top-0 right-0 p-8 opacity-5"><i className="fas fa-rss text-9xl"></i></div>
-              <h3 className="text-sm font-black uppercase italic mb-6 border-b border-white/10 pb-2">Wilayah Respon: {user.region}</h3>
-              <div className="flex-1 overflow-y-auto space-y-6 custom-scrollbar pr-2 relative z-10">
-                 {data.length > 0 ? data.map((inc) => (
-                    <div key={inc.id || inc._id} className="relative border-l-2 border-white/20 pl-5 group active:scale-95 transition-all">
-                       <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-nu-gold border-4 border-nu-green"></div>
-                       <p className="text-[8px] font-bold text-white/50 uppercase">{new Date(inc.updated_at || inc.createdAt).toLocaleTimeString()}</p>
-                       <h4 className="text-xs font-bold uppercase leading-tight">{inc.title}</h4>
-                       <div className="flex gap-2 mt-2">
-                          <span className="text-[7px] text-nu-gold font-black uppercase bg-white/10 px-2 py-0.5 rounded-full">{inc.status}</span>
-                          {inc.priority_level === 'CRITICAL' && <span className="text-[7px] text-white font-black uppercase bg-red-600 px-2 py-0.5 rounded-full animate-pulse">Critical</span>}
-                       </div>
-                    </div>
-                 )) : <p className="text-white/30 italic text-xs text-center py-20 uppercase">Radar Wilayah Clear</p>}
+          {inc.needs_numeric && Object.values(inc.needs_numeric).some(v => v > 0) && (
+            <div className="bg-amber-50 rounded-2xl p-4 border border-amber-200">
+              <p className="text-xs font-bold text-amber-700 uppercase mb-2">Kebutuhan</p>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(inc.needs_numeric).map(([k, v]) => 
+                  v > 0 && (
+                    <span key={k} className="text-[10px] bg-white px-2 py-1 rounded border border-amber-100 font-bold uppercase">
+                      {k}: {v}
+                    </span>
+                  )
+                )}
               </div>
-           </div>
-        </div>
+            </div>
+          )}
 
+          <button
+            onClick={() => handleJoinMission(inc.id)}
+            disabled={joiningMission === inc.id}
+            className="w-full bg-[#006432] text-white py-3 rounded-xl font-bold disabled:opacity-50"
+          >
+            {joiningMission === inc.id ? (
+              <><i className="fas fa-spinner fa-spin mr-2"></i>Mendaftar...</>
+            ) : (
+              <><i className="fas fa-hand-rock mr-2"></i>Join Misi Ini</>
+            )}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-screen bg-slate-50">
+      {/* Header */}
+      <header className="bg-[#006432] p-4 shadow-lg shrink-0">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-white font-bold uppercase">Relawan {userRegion}</h1>
+            <p className="text-green-200 text-xs">{user?.full_name}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setActiveTab('notifications')}
+              className="relative text-white"
+            >
+              <i className="fas fa-bell text-lg"></i>
+              {unreadCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[8px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+            <button 
+              onClick={handleLogout} 
+              className="text-white bg-red-500 px-3 py-2 rounded text-sm"
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1 overflow-y-auto p-4 pb-24">
+        <div className="space-y-4">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white p-3 rounded-xl shadow text-center">
+              <p className="text-xl font-bold text-red-600">{stats.active}</p>
+              <p className="text-[8px] text-slate-500 uppercase">Misi Aktif</p>
+            </div>
+            <div className="bg-white p-3 rounded-xl shadow text-center">
+              <p className="text-xl font-bold text-orange-600">{stats.critical}</p>
+              <p className="text-[8px] text-slate-500 uppercase">Kritis</p>
+            </div>
+            <div className="bg-white p-3 rounded-xl shadow text-center">
+              <p className="text-xl font-bold text-blue-600">{stats.myMissions}</p>
+              <p className="text-[8px] text-slate-500 uppercase">Misi Saya</p>
+            </div>
+          </div>
+
+          {/* Critical Alerts */}
+          {verifiedIncidents.filter(i => i.priority_level === 'CRITICAL').slice(0, 3).map(inc => (
+            <div 
+              key={inc.id} 
+              className="bg-red-600 text-white p-4 rounded-xl shadow-lg cursor-pointer"
+              onClick={() => { setSelectedIncident(inc); setActiveTab('mission'); }}
+            >
+              <p className="text-xs opacity-70 uppercase">Misi Kritis</p>
+              <p className="font-bold mt-1">{inc.title}</p>
+              <p className="text-xs mt-2 opacity-80">{inc.region}</p>
+            </div>
+          ))}
+
+          {/* Verified Incidents List */}
+          <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <div className="p-4 border-b flex justify-between items-center">
+              <h2 className="font-bold text-sm uppercase">Kejadian Terverifikasi</h2>
+              <span className="text-xs text-slate-500">{verifiedIncidents.length} kejadian</span>
+            </div>
+            <div className="divide-y max-h-96 overflow-y-auto">
+              {verifiedIncidents.length === 0 ? (
+                <p className="p-4 text-slate-400 text-center text-sm">Tidak ada kejadian terverifikasi</p>
+              ) : (
+                verifiedIncidents.map(inc => (
+                  <div 
+                    key={inc.id} 
+                    className="p-4 cursor-pointer hover:bg-slate-50 transition-colors"
+                    onClick={() => { setSelectedIncident(inc); setActiveTab('mission'); }}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <p className="font-bold text-sm">{inc.title}</p>
+                        <p className="text-xs text-slate-500 mt-1">{inc.region} • {inc.disaster_type}</p>
+                      </div>
+                      <span className={`text-[8px] px-2 py-1 rounded font-bold uppercase ${
+                        inc.priority_level === 'CRITICAL' ? 'bg-red-100 text-red-700' :
+                        inc.priority_level === 'HIGH' ? 'bg-orange-100 text-orange-700' :
+                        'bg-green-100 text-green-700'
+                      }`}>
+                        {inc.priority_level || 'LOW'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-[10px] bg-slate-100 px-2 py-1 rounded">
+                        {inc.status}
+                      </span>
+                      {inc.priority_level === 'CRITICAL' && (
+                        <span className="text-[10px] bg-red-500 text-white px-2 py-1 rounded animate-pulse">
+                          URGENT
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
       </main>
 
-      {/* --- FORM KESEDIAAN --- */}
-      {showDutyForm && targetIncident && (
-        <div className="fixed inset-0 z-[3000] bg-black/60 backdrop-blur-md p-6 flex items-end">
-           <div className="w-full bg-white rounded-[40px] shadow-2xl p-8 animate-in slide-in-from-bottom duration-500">
-              <div className="flex justify-between items-center mb-6">
-                 <h3 className="font-black text-nu-green uppercase italic text-lg tracking-tighter">Atur Jadwal Tugas</h3>
-                 <i className="fas fa-times-circle text-slate-300 text-xl" onClick={() => setShowDutyForm(false)}></i>
-              </div>
-              <p className="text-[10px] text-slate-400 font-bold uppercase mb-6 leading-relaxed">Misi: {targetIncident.title}</p>
-              
-              <div className="space-y-4">
-                 <div>
-                    <label className="text-[9px] font-black text-slate-400 uppercase ml-2 mb-1 block">Waktu Mulai Bisa Bantu</label>
-                    <input type="datetime-local" className="w-full p-4 bg-slate-50 rounded-2xl border-none shadow-inner font-bold text-sm" 
-                      onChange={e => setAvailability({...availability, from: e.target.value})} />
-                 </div>
-                 <div>
-                    <label className="text-[9px] font-black text-slate-400 uppercase ml-2 mb-1 block">Waktu Harus Selesai</label>
-                    <input type="datetime-local" className="w-full p-4 bg-slate-50 rounded-2xl border-none shadow-inner font-bold text-sm" 
-                      onChange={e => setAvailability({...availability, until: e.target.value})} />
-                 </div>
-                 <button onClick={handleApplyDuty} className="w-full bg-nu-green text-white py-5 rounded-3xl font-black uppercase text-xs shadow-xl shadow-green-900/20 mt-4 active:scale-95 transition-all">
-                    Konfirmasi Siap Terjun
-                 </button>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {/* FIXED ACTION BAR */}
-      <nav className="fixed bottom-0 left-0 right-0 h-20 bg-white/95 backdrop-blur-md border-t flex items-center justify-around z-[2000] px-6 shadow-[0_-10px_25px_rgba(0,0,0,0.05)] pb-safe">
-          <NavIcon icon="home" label="Dashboard" active />
-          <div className="relative -top-6">
-             <button onClick={() => window.location.pathname = '/lapor'} className="w-16 h-16 bg-red-600 rounded-full shadow-2xl flex items-center justify-center text-white border-4 border-white active:scale-90 transition-all shadow-red-200">
-                <i className="fas fa-bullhorn text-2xl"></i>
-             </button>
-             <p className="text-[8px] font-black text-center mt-1 uppercase text-red-600 tracking-widest leading-none">Quick_Report</p>
-          </div>
-          <NavIcon icon="user-clock" label="Shift Saya" />
+      {/* Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t p-3 flex justify-around text-xs z-10 shadow-lg">
+        <button 
+          onClick={() => setActiveTab('home')}
+          className={`${activeTab === 'home' ? 'text-[#006432]' : 'text-slate-400'} font-bold flex flex-col items-center`}
+        >
+          <i className="fas fa-home text-lg"></i>
+          <span>Home</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('map')}
+          className={`${activeTab === 'map' ? 'text-[#006432]' : 'text-slate-400'} flex flex-col items-center`}
+        >
+          <i className="fas fa-map text-lg"></i>
+          <span>Peta</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('missions')}
+          className={`${activeTab === 'missions' ? 'text-[#006432]' : 'text-slate-400'} flex flex-col items-center`}
+        >
+          <i className="fas fa-briefcase text-lg"></i>
+          <span>Misi</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('report')}
+          className={`${activeTab === 'report' ? 'text-[#006432]' : 'text-slate-400'} flex flex-col items-center`}
+        >
+          <i className="fas fa-bullhorn text-lg"></i>
+          <span>Lapor</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('notifications')}
+          className={`${activeTab === 'notifications' ? 'text-[#006432]' : 'text-slate-400'} flex flex-col items-center relative`}
+        >
+          <i className="fas fa-bell text-lg"></i>
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] w-4 h-4 rounded-full flex items-center justify-center">
+              {unreadCount}
+            </span>
+          )}
+          <span>Notif</span>
+        </button>
       </nav>
     </div>
   );
 };
-
-// UI ATOMS
-const KPIBox = ({ label, value, color, isText }) => (
-  <div className="bg-white p-3 rounded-2xl shadow-md border border-slate-50 text-center flex flex-col justify-center h-20">
-    <p className={`${isText ? 'text-[10px]' : 'text-xl'} font-black ${color} leading-none truncate`}>{value}</p>
-    <p className="text-[7px] font-black text-slate-400 uppercase mt-1 tracking-tighter">{label}</p>
-  </div>
-);
-
-const NavIcon = ({ icon, label, active }) => (
-  <div className={`flex flex-col items-center gap-1 ${active ? 'text-nu-green' : 'text-slate-300'}`}>
-    <i className={`fas fa-${icon} text-xl`}></i>
-    <span className="text-[8px] font-black uppercase tracking-widest">{label}</span>
-  </div>
-);
 
 export default RelawanTactical;

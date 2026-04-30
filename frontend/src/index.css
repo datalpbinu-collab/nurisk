@@ -9,22 +9,10 @@
   --nu-gold: #c5a059;
   --safe-top: env(safe-area-inset-top);
   --safe-bottom: env(safe-area-inset-bottom);
-  --header-height: 3.5rem; /* 56px */
-  --nav-height: 4rem;    /* 64px */
 }
 
-/* Membuang perilaku browser agar terasa seperti APK Native */
 * {
-  -webkit-tap-highlight-color: transparent; /* Hapus kotak abu-abu saat klik */
-  -webkit-touch-callout: none;              /* Hapus menu copy-paste pada gambar/link */
-  user-select: none;                        /* Cegah seleksi teks global */
   box-sizing: border-box;
-}
-
-/* Izinkan seleksi teks hanya pada input dan area tulisan penting */
-input, textarea, [contenteditable="true"], .selectable-text {
-  user-select: text !important;
-  -webkit-user-select: text !important;
 }
 
 html, body, #root {
@@ -34,9 +22,15 @@ html, body, #root {
   padding: 0;
   background-color: #f8fafc;
   font-family: 'Inter', -apple-system, sans-serif;
-  /* Cegah browser "memantul" atau Pull-to-Refresh yang mengganggu di APK */
-  overscroll-behavior-y: none; 
-  overflow: hidden; 
+}
+
+#root {
+  display: block;
+}
+
+.scrolling-y {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Responsif Font Size */
@@ -53,14 +47,10 @@ html { font-size: 14px; }
   width: 100vw;
 }
 
-/* Area Konten Tengah yang bisa di-scroll */
+/* Default scroll behavior */
 main {
-  flex: 1;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch; /* Scroll halus di iPhone/Android */
-  position: relative;
-  /* Memberi ruang agar tidak tertutup Bottom Nav */
-  padding-bottom: var(--nav-height); 
+  -webkit-overflow-scrolling: touch;
 }
 
 /* --- 4. MOBILE NATIVE OPTIMIZATION --- */
@@ -74,13 +64,30 @@ main {
 }
 
 /* Custom Scrollbar (Sangat Halus & Minimalis) */
-.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar { width: 3px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #e2e8f0;
+  background: #cbd5e1;
   border-radius: 10px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--nu-green); }
+
+/* Mobile Scroll Fixes */
+.scroll-container {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+.scroll-no-bounce {
+  overscroll-behavior-y: none;
+}
+
+/* Prevent pull-to-refresh on mobile */
+.prevent-pull-refresh {
+  overscroll-behavior-y: none;
+  touch-action: pan-y pan-x;
+}
 
 /* --- 5. MAP & HUD CONFIG --- */
 .leaflet-container {
@@ -90,17 +97,50 @@ main {
   z-index: 1;
 }
 
-/* Marker Glow untuk Prioritas Kritis */
-.marker-glow {
-  filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.8));
+/* --- STATUS COLORS (PER PRD) --- */
+.status-reported { color: #64748b; } /* Abu-abu */
+.status-verified { color: #3b82f6; } /* Biru */
+.status-assessment { color: #eab308; } /* Kuning */
+.status-commanded { color: #f97316; } /* Oranye */
+.status-responded { color: #22c55e; } /* Hijau */
+.status-completed { color: #0f172a; } /* Hitam/Slate */
+
+/* Critical Pulse (Marker Berdenyut Merah) */
+.marker-critical-pulse {
+  animation: critical-pulse 1.5s infinite;
+}
+
+@keyframes critical-pulse {
+  0% { filter: drop-shadow(0 0 0px #ef4444); }
+  50% { filter: drop-shadow(0 0 15px #ef4444); }
+  100% { filter: drop-shadow(0 0 0px #ef4444); }
+}
+
+@keyframes earthquake-shake {
+  0% { transform: translate(0, 0); }
+  10% { transform: translate(-2px, -2px); }
+  20% { transform: translate(2px, 2px); }
+  30% { transform: translate(-2px, 2px); }
+  40% { transform: translate(2px, -2px); }
+  50% { transform: translate(-2px, 0px); }
+  60% { transform: translate(2px, 0px); }
+  70% { transform: translate(0px, 2px); }
+  80% { transform: translate(0px, -2px); }
+  90% { transform: translate(-1px, 1px); }
+  100% { transform: translate(0, 0); }
+}
+
+.shake-alert {
+  animation: earthquake-shake 0.5s ease-in-out infinite;
 }
 
 /* --- 6. GLASSMORPHISM & SHADOWS --- */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.75);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px 0 rgba(0, 100, 50, 0.1);
 }
 
 .glass-ui {
@@ -185,4 +225,23 @@ main {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+@keyframes beacon {
+  0% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.5); opacity: 0.3; }
+  100% { transform: scale(1); opacity: 0.8; }
+}
+
+.reported-pulse {
+  animation: beacon 2s infinite;
+  background-color: #64748b !important; /* Warna Abu-abu sesuai PRD */
+}
+
+button, a {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+
+.premium-popup {
+  z-index: 1000 !important;
 }

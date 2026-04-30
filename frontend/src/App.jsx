@@ -2,6 +2,18 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { io } from 'socket.io-client';
 import api from './services/api';
 import axios from 'axios';
+import ErrorBoundary from './components/ErrorBoundary';
+
+// Error Boundary wrapper component
+function withErrorBoundary(WrappedComponent) {
+  return function WithErrorBoundaryComponent(props) {
+    return (
+      <ErrorBoundary>
+        <WrappedComponent {...props} />
+      </ErrorBoundary>
+    );
+  };
+}
 
 // --- NATIVE HP INTEGRATION ---
 import { App as CapApp } from '@capacitor/app';
@@ -17,23 +29,21 @@ import { Preferences } from '@capacitor/preferences';
 import MapHUD from './components/CommandCenter'; 
 import MissionManager from './components/CompleteView'; 
 import InventoryView from './components/InventoryView';
-import Wallboard from './components/Wallboard';
 import LogFooter from './components/LogFooter';
-import LogisticsHub from './components/LogisticsHub';
-import Assessment from './components/Assessment';
-import InstructionView from './components/InstructionView';
-import ActionView from './components/ActionView';
 import PublicReport from './components/PublicReport';
-import VolunteerRegister from './components/VolunteerRegister';
 import RelawanTactical from './components/RelawanTactical'; 
+import FieldStaffDashboard from './components/FieldStaffDashboard';
 import PublicDashboard from './components/PublicDashboard';
-import Login from './components/Login';
+import PersonnelPortal from './components/PersonnelPortal';
+import AuditLogView from './components/AuditLogView'; // Import the new component
+import AdminDashboard from './components/AdminDashboard';
+
 
 // --- KONFIGURASI ENGINE ---
 // PENTING: GANTI URL DI BAWAH DENGAN NAMA SPACE HUGGING FACE ANDA YANG BARU
-const BASE_URL = 'https://nupeduli-pusdatin-nu-backend.hf.space'; 
+const BASE_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:7860';
 
-const socket = io(BASE_URL, { 
+const socket = io(BASE_URL, {
   reconnection: true, 
   reconnectionAttempts: Infinity,
   transports: ['websocket'], 
@@ -86,27 +96,33 @@ function App() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [resInc, resInv] = await Promise.all([
-        api.get('incidents').catch(() => ({ data: [] })), 
-        api.get('inventory').catch(() => ({ data: [] }))
-      ]);
-      setIncidents(Array.isArray(resInc.data) ? resInc.data : []);
-      setInventory(Array.isArray(resInv.data) ? resInv.data : []);
+      const requests = [api.get('incidents').catch(() => ({ data: [] }))];
+      
+      if (stateRef.current.isLoggedIn) {
+        requests.push(api.get('inventory').catch(() => ({ data: [] })));
+      }
+
+      const [resInc, resInv] = await Promise.all(requests);
+      setIncidents(Array.isArray(resInc?.data) ? resInc.data : []);
+      if (resInv) setInventory(Array.isArray(resInv.data) ? resInv.data : []);
     } catch (err) {
       console.error("Fetch Error");
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isLoggedIn]);
 
   const handleLoginSuccess = async (user) => {
-    setIsLoading(true); // Tampilkan loading saat transisi
+    setIsLoading(true);
     setUserData(user);
     setIsLoggedIn(true);
     setShowLogin(false);
     await storage.set('userData', user);
     await storage.set('isLoggedIn', true);
-    fetchData(); // Ambil data sesuai role
+    if (user.token) {
+      localStorage.setItem('token', user.token);
+    }
+    fetchData();
   };
 
   const handleLogout = async () => {
@@ -125,18 +141,39 @@ function App() {
       if (uData) {
         setUserData(uData);
         setIsLoggedIn(true);
+        if (uData.token) {
+          localStorage.setItem('token', uData.token);
+        }
       }
       fetchData();
     };
     bootstrap();
+    
+    // Listen for various Socket events
     socket.on('emergency_broadcast', () => fetchData());
-    return () => socket.off('emergency_broadcast');
+    socket.on('notification', (data) => {
+      console.log('[SOCKET] New notification:', data);
+      // You can add state update here to show notification in UI
+    });
+    socket.on('notification_read', ({ notification_id }) => {
+      console.log('[SOCKET] Notification read:', notification_id);
+    });
+    socket.on('emergency_alert', (alert) => {
+      console.log('[SOCKET] Emergency alert:', alert);
+      alert(`🚨 EMERGENCY: ${alert.title}\n${alert.body}`);
+    });
+    
+    return () => {
+      socket.off('emergency_broadcast');
+      socket.off('notification');
+      socket.off('notification_read');
+      socket.off('emergency_alert');
+    };
   }, [fetchData, storage]);
 
   // --- ROUTING LOGIC ---
   const path = window.location.pathname;
   if (path === '/lapor') return <PublicReport />;
-  if (path === '/gabung') return <VolunteerRegister />;
   
   if (isLoading) return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-white">
@@ -150,47 +187,33 @@ function App() {
       <div className="h-screen w-screen relative bg-white overflow-hidden">
         <PublicDashboard incidents={filteredData} onOpenLogin={() => setShowLogin(true)} />
         <button onClick={() => setShowLogin(true)} className="fixed bottom-10 right-10 z-[9999] bg-[#006432] text-white p-5 rounded-full shadow-2xl animate-bounce border-4 border-white"><i className="fas fa-user-shield text-xl"></i></button>
-        {showLogin && <Login onLoginSuccess={handleLoginSuccess} onClose={() => setShowLogin(false)} />}
+        {showLogin && (
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <PersonnelPortal onLoginSuccess={handleLoginSuccess} onBack={() => setShowLogin(false)} />
+            </div>
+          </div>
+        )}
       </div>
     );
+  }
+
+  if (userData?.role === 'FIELD_STAFF') {
+    return <FieldStaffDashboard user={userData} onLogout={handleLogout} />;
   }
 
   if (userData?.role === 'RELAWAN') {
     return <RelawanTactical user={userData} incidents={filteredData} onLogout={handleLogout} />;
   }
 
-  return (
-    <div className="h-screen w-screen flex flex-col bg-[#f8fafc] text-slate-800 overflow-hidden font-sans relative safe-area-inset">
-      <header className="h-14 bg-[#006432] border-b-2 border-[#c5a059] flex items-center px-6 justify-between shrink-0 shadow-2xl z-[5000]">
-        <div className="flex items-center gap-3">
-          <img src="https://pwnu-jateng.org/uploads/infoumum/20250825111304-2025-08-25infoumum111252.png" className="h-8" alt="logo" />
-          <h1 className="font-black text-[10px] md:text-sm text-white uppercase italic tracking-tighter">PWNU JATENG COMMAND CENTER</h1>
-        </div>
-        <button onClick={handleLogout} className="text-white/40 p-2"><i className="fas fa-power-off"></i></button>
-      </header>
+  // ADMIN ROLES: PWNU, SUPER_ADMIN, STAFF_PWNU, STAFF_PCNU, ADMIN_PWNU, COMMANDER
+  const adminRoles = ['PWNU', 'SUPER_ADMIN', 'STAFF_PWNU', 'STAFF_PCNU', 'ADMIN_PWNU', 'COMMANDER']; // Ensure 'ADMIN_PWNU' is included
+  if (adminRoles.includes(userData?.role)) {
+    return <AdminDashboard user={userData} onLogout={handleLogout} />; // Render AdminDashboard
+  }
 
-      <div className="flex flex-1 overflow-hidden relative flex-col md:flex-row">
-        <aside className="hidden md:flex w-[85px] bg-white border-r border-slate-200 flex flex-col items-center py-8 gap-10 shrink-0 z-40">
-          <NavBtn icon="home" active={activeTab === 'dashboard'} onClick={() => navigateTo('dashboard')} />
-          <NavBtn icon="crosshairs" active={activeTab === 'command'} onClick={() => navigateTo('command')} />
-          <NavBtn icon="table" active={activeTab === 'manager'} onClick={() => navigateTo('manager')} />
-          <NavBtn icon="boxes" active={activeTab === 'assets'} onClick={() => navigateTo('assets')} />
-        </aside>
-
-        <main className="flex-1 relative bg-white overflow-hidden shadow-inner">
-          <div className="h-full w-full overflow-y-auto custom-scrollbar p-4 md:p-8">
-             {activeTab === 'dashboard' && <DashboardHome incidents={filteredData} onNavigate={navigateTo} />}
-             {activeTab === 'command' && <MapHUD incidents={filteredData} onRefresh={fetchData} onAction={setActiveTab} onSelect={setSelectedIncident} />}
-             {activeTab === 'manager' && <MissionManager incidents={filteredData} onRefresh={fetchData} onAction={setActiveTab} onSelect={setSelectedIncident} />}
-             {activeTab === 'assets' && <InventoryView inventory={inventory} onRefresh={fetchData} />}
-             {activeTab === 'logistics' && <LogisticsHub user={userData} inventory={inventory} />}
-             {activeTab === 'wallboard' && <Wallboard incidents={filteredData} />}
-          </div>
-        </main>
-      </div>
-      <LogFooter />
-    </div>
-  );
+  // Fallback for other roles
+  return <AdminDashboard user={userData} onLogout={handleLogout} />;
 }
 
 // SUB KOMPONEN (PENTING: Gunakan default value [] )
@@ -217,4 +240,4 @@ function NavBtn({ icon, active, onClick }) {
   );
 }
 
-export default App;
+export default withErrorBoundary(App);

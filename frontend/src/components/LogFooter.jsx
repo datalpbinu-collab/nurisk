@@ -1,33 +1,28 @@
 import React from 'react';
 
-const LogFooter = ({ logs }) => {
-  return (
-    <footer className="h-10 bg-[#020617] border-t border-white/5 flex items-center px-4 overflow-hidden shrink-0 z-[2000]">
-      {/* Label Terminal */}
-      <div className="flex items-center gap-2 border-r border-white/10 pr-4 h-full">
-        <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-        <span className="text-[9px] font-black text-green-500 uppercase tracking-[0.2em]">Ops_Log:</span>
-      </div>
+const LogFooter = ({ logs = [] }) => {
+  // PENGAMAN: Pastikan logs selalu berupa Array
+  const safeLogs = Array.isArray(logs) ? logs : [];
 
-      {/* Konten Log Berjalan secara Horizontal agar tidak makan tempat */}
-      <div className="flex-1 px-4 overflow-hidden whitespace-nowrap relative flex items-center h-full">
-        <div className="flex gap-8 animate-marquee-slow">
-          {logs.length > 0 ? logs.map((log, i) => (
-            <span key={i} className="text-[9px] font-mono text-slate-400 uppercase tracking-tighter">
-              <span className="text-slate-600">[{new Date().toLocaleTimeString()}]</span> {log}
-            </span>
-          )) : (
-            <span className="text-[9px] font-mono text-slate-700 italic tracking-widest uppercase">
-              System Secure • Handshake established • Awaiting tactical packets...
-            </span>
-          )}
+  return (
+    <footer className="fixed bottom-0 left-0 right-0 h-8 bg-slate-900 text-white flex items-center px-6 justify-between z-[9999] border-t border-white/10">
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+          <span className="text-[10px] font-black uppercase tracking-widest">System Live</span>
+        </div>
+        <div className="h-4 w-[1px] bg-white/10"></div>
+        <div className="flex items-center gap-2 text-white/50">
+          <i className="fas fa-history text-[10px]"></i>
+          {/* GUNAKAN safeLogs AGAR TIDAK ERROR LENGTH */}
+          <span className="text-[9px] font-bold uppercase">{safeLogs.length} Aktivitas Tercatat</span>
         </div>
       </div>
 
-      {/* Status Koneksi */}
-      <div className="pl-4 border-l border-white/10 h-full flex items-center gap-4">
-         <span className="text-[8px] font-bold text-slate-500 uppercase">Port: 5000</span>
-         <span className="text-[8px] font-black text-green-900 bg-green-500/10 px-2 py-0.5 rounded">Active</span>
+      <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-tighter text-white/40">
+        <span>PWNU Jateng Pusdatin v2.0</span>
+        <span className="text-white/10">|</span>
+        <span>{new Date().toLocaleDateString('id-ID')}</span>
       </div>
     </footer>
   );

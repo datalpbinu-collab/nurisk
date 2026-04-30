@@ -1,235 +1,305 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Popup, ZoomControl } from 'react-leaflet';
-import L from 'leaflet';
-import api from '../services/api';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
-import 'leaflet/dist/leaflet.css';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { Geolocation } from '@capacitor/geolocation';
+import MapDisplay from './MapDisplay'; 
+import InventoryView from './InventoryView'; 
+import DisasterTrendAnalyzer from './DisasterTrendAnalyzer'; 
+import { NEED_CATEGORIES, normalizeStatus } from '../utils/constants';
 
-// --- SUB-KOMPONEN: LIFE CYCLE DOTS (PRD TAHAP 3) ---
-const LifeCycleStatus = ({ currentStatus }) => {
-  const stages = ['REPORTED', 'VERIFIED', 'ASSESSMENT', 'COMMANDED', 'RESPONDED', 'COMPLETED'];
-  const currentIndex = stages.indexOf(currentStatus?.toUpperCase() || 'REPORTED');
-  return (
-    <div className="flex items-center gap-1 mt-2">
-      {stages.map((s, i) => (
-        <div key={i} className={`h-1.5 w-full rounded-full ${i <= currentIndex ? 'bg-green-600 shadow-[0_0_5px_rgba(22,163,74,0.5)]' : 'bg-slate-200'}`} title={s} />
-      ))}
-    </div>
-  );
-};
+/**
+ * PUSDATIN NU PEDULI - TOTAL PUBLIC DASHBOARD V26.0
+ * -----------------------------------------------------------
+ * SOLUTION: Handshaking Authority Fix, Active Navigation, 
+ * Adaptive Weather Intel (Mobile & Desktop Balanced).
+ */
 
-// --- SUB-KOMPONEN: GAP ANALYSIS GAUGE (PRD HAL 4) ---
-const NeedsDistributionGauge = ({ needs = [], distribution = [] }) => {
-  const totalNeeds = needs.reduce((acc, curr) => acc + (parseInt(curr.qty) || 0), 0) || 100; // Default 100 if empty
-  const totalDist = distribution.reduce((acc, curr) => acc + (parseInt(curr.qty) || 0), 0) || 0;
-  const percent = Math.min(Math.round((totalDist / totalNeeds) * 100), 100);
+const PublicDashboard = ({ incidents = [], inventory = [], news = [], onOpenLogin, onOpenReport }) => {
+  const [activeTab, setActiveTab] = useState('home');
+  const [weather, setWeather] = useState({ current: null, hourly: [], daily: [] });
+  const [location, setLocation] = useState({ name: 'JAWA TENGAH', lat: -7.15, lon: 110.14 });
+  const [selectedKPI, setSelectedKPI] = useState(null);
 
-  return (
-    <div className="space-y-2">
-      <div className="flex justify-between text-[9px] font-black uppercase tracking-tighter">
-        <span className="text-slate-400">Penyaluran Bantuan</span>
-        <span className={percent >= 100 ? 'text-green-600' : 'text-orange-600'}>{percent}% Terpenuhi</span>
-      </div>
-      <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden shadow-inner border border-slate-50">
-        <div className="h-full bg-gradient-to-r from-orange-400 to-green-500 transition-all duration-1000" style={{ width: `${percent}%` }} />
-      </div>
-    </div>
-  );
-};
+  // --- 1. ENGINE: DATE PROTECTOR (ANTI-INVALID-DATE) ---
+  const formatTacticalTime = useCallback((d) => {
+    if (!d) return "TRANSMITTING";
+    const validStr = d.includes(' ') ? d.replace(' ', 'T') : d;
+    const date = new Date(validStr);
+    if (isNaN(date.getTime())) return "REALTIME";
+    return date.toLocaleString('id-ID', { 
+      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 
+    }).replace(/\./g, ':');
+  }, []);
 
-const PublicDashboard = ({ incidents = [], onOpenLogin }) => {
-  const [data, setData] = useState(Array.isArray(incidents) ? incidents : []);
-  const [news, setNews] = useState([]);
-  const [inventory, setInventory] = useState([]);
-
-  // Fetch Data Sesuai PRD (Transparency & Scraper)
-  useEffect(() => {
-    const fetchPublicData = async () => {
-      try {
-        const [resInc, resInv, resNews] = await Promise.all([
-          api.get('incidents/public').catch(() => ({ data: [] })),
-          api.get('inventory').catch(() => ({ data: [] })),
-          api.get('news').catch(() => ({ data: [] }))
-        ]);
-        setData(Array.isArray(resInc.data) ? resInc.data : []);
-        setInventory(Array.isArray(resInv.data) ? resInv.data : []);
-        setNews(Array.isArray(resNews.data) ? resNews.data : []);
-      } catch (e) { console.error("Sync Error"); }
-    };
-    fetchPublicData();
-  }, [incidents]);
-
-  // Integrated SITREP PDF (PRD Hal 4)
-  const downloadSITREP = (item) => {
-    const doc = new jsPDF();
-    doc.setFillColor(0, 100, 50); doc.rect(0, 0, 210, 30, 'F');
-    doc.setTextColor(255); doc.setFontSize(16).text("PUBLIC SITUATION REPORT (SITREP)", 105, 15, { align: 'center' });
-    doc.setFontSize(10).text("Data Terverifikasi Pusdatin NU Peduli Jawa Tengah", 105, 22, { align: 'center' });
-    autoTable(doc, {
-      startY: 40, theme: 'grid',
-      head: [['Parameter', 'Detail Informasi']],
-      body: [
-        ['Kejadian', item.title], ['Wilayah', item.region], ['Status Akhir', item.status],
-        ['Waktu Laporan', new Date(item.createdAt).toLocaleString('id-ID')],
-        ['AI Severity Score', item.priority_score || 'Calculating...']
-      ],
-      headStyles: { fillColor: [197, 160, 89] }
-    });
-    doc.save(`SITREP_${item.region}_${item.id}.pdf`);
+  // --- 2. ENGINE: ADAPTIVE WEATHER HUB ---
+  const initWeather = async () => {
+    try {
+      let lat = -7.15, lon = 110.14;
+      
+      if (typeof window !== 'undefined' && window.Geolocation) {
+        try {
+          const pos = await Geolocation.getCurrentPosition();
+          lat = pos.coords.latitude;
+          lon = pos.coords.longitude;
+        } catch (e) {
+          console.log('Using default location');
+        }
+      }
+      
+      const API_KEY = '311da565f6bbe61c1896ea46b2f8c353';
+      
+      // Current + Forecast
+      const res = await axios.get(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&lang=id`);
+      
+      const current = res.data.list[0];
+      const hourly = res.data.list.slice(0, 12);
+      const dailyMap = {};
+      res.data.list.forEach(item => {
+        const date = new Date(item.dt * 1000).toLocaleDateString('id-ID');
+        if (!dailyMap[date]) dailyMap[date] = item;
+      });
+      const daily = Object.values(dailyMap).slice(0, 7);
+      
+      setWeather({ current, hourly, daily });
+      if (res.data.city) setLocation({ name: res.data.city.name, lat, lon });
+    } catch (e) {
+      console.error("Weather Error:", e.message);
+    }
   };
 
+  useEffect(() => { initWeather(); }, []);
+
+  // --- 3. DERIVED STATS ---
+  const stats = useMemo(() => {
+    const total = incidents.length;
+    const active = incidents.filter(i => normalizeStatus(i.status) !== 'COMPLETED').length;
+    const affected = incidents.reduce((sum, i) => sum + (i.affected_people || 0), 0);
+    return { total, active, affected };
+  }, [incidents]);
+
+  // --- 4. NEWS & INVENTORY DISPLAY ---
+  const displayedNews = useMemo(() => news.slice(0, 5), [news]);
+  const displayedInventory = useMemo(() => inventory.slice(0, 4), [inventory]);
+
+  // --- 5. RENDER ---
+  if (selectedKPI) {
+    return (
+      <div className="min-h-screen bg-[#f8fafc] font-sans">
+        <header className="h-14 bg-[#006432] px-4 flex items-center justify-between">
+          <button onClick={() => setSelectedKPI(null)} className="text-white font-black text-xs uppercase flex items-center gap-2">
+            <i className="fas fa-arrow-left"></i> Kembali
+          </button>
+          <h2 className="text-white font-black text-sm uppercase italic">{selectedKPI.title}</h2>
+          <div></div>
+        </header>
+        <main className="p-4 md:p-10">
+          <div className="max-w-[1600px] mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {selectedKPI.data.map((item, i) => (
+              <div key={i} className="bg-white p-6 rounded-2xl shadow-sm border-l-4 border-[#006432]">
+                <p className="text-xs font-bold text-slate-400 uppercase">{item.disaster_type || 'Unknown'}</p>
+                <p className="text-lg font-black text-slate-800 mt-2">{item.title}</p>
+                <p className="text-sm text-slate-500 mt-1">{item.region}</p>
+              </div>
+            ))}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col h-screen bg-[#f1f5f9] text-slate-900 overflow-hidden font-sans">
-      
-      {/* HEADER: Modern NU Style */}
-      <header className="h-14 bg-white/80 backdrop-blur-md border-b flex items-center px-6 justify-between z-[5000] shadow-sm sticky top-0">
+    <div className="h-screen bg-[#f8fafc] font-sans flex flex-col">
+      <header className="h-14 bg-[#006432] px-4 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
-          <img src="https://pwnu-jateng.org/uploads/infoumum/20250825111304-2025-08-25infoumum111252.png" className="h-8" alt="logo" />
-          <div className="flex flex-col">
-            <h1 className="text-[10px] md:text-sm font-black text-[#006432] uppercase tracking-tighter italic leading-none">Integrated Command Center</h1>
-            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-1">NU Peduli Jawa Tengah</p>
+          <i className="fas fa-shield-halved text-white/50 text-xl"></i>
+          <div>
+            <h1 className="text-white font-black text-sm uppercase tracking-tighter">PUSDATIN <span className="text-white/60 font-normal">NU</span></h1>
+            <p className="text-[10px] text-white/60 font-medium tracking-widest">PELAYANAN DARURAT TANGGAP</p>
           </div>
         </div>
-        <button onClick={onOpenLogin} className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-[#006432] transition-all">
-          <i className="fas fa-user-shield text-lg"></i>
-        </button>
+        {onOpenLogin && (
+          <button onClick={onOpenLogin} className="bg-white/10 text-white px-4 py-2 rounded-full text-xs font-bold hover:bg-white/20 transition-all flex items-center gap-2">
+            <i className="fas fa-user-circle"></i> LOGIN
+          </button>
+        )}
       </header>
 
-      <main className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 space-y-6 pb-32">
-        
-        {/* KPI BOXES: Situational Awareness */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-           <KPIBox label="Total Kejadian" value={data?.length || 0} color="text-slate-800" icon="clipboard-list" />
-           <KPIBox label="Misi Aktif" value={data?.filter(i => i.status !== 'COMPLETED').length || 0} color="text-red-600" icon="bullhorn" />
-           <KPIBox label="Relawan Siaga" value="1,242" color="text-green-600" icon="user-shield" />
-           <KPIBox label="Aset Armada" value="24 Unit" color="text-[#c5a059]" icon="truck-moving" />
-        </div>
+      <main className="flex-1 overflow-y-auto pb-40 p-4 md:p-10 space-y-10 custom-scrollbar min-h-0">
+        {activeTab === 'home' ? (
+          <div className="max-w-[1600px] mx-auto space-y-10 animate-in fade-in duration-500">
+            
+            {/* PILLAR 1: COMPACT KPI CARDS */}
+            <div className="grid grid-cols-3 gap-4 md:gap-10">
+              <KPIBlock label="Kejadian" value={stats.total} color="text-slate-800" icon="bullhorn" onClick={() => setSelectedKPI({ title: 'Rekap Kejadian', data: incidents })} />
+              <KPIBlock label="Misi Aktif" value={stats.active} color="text-red-600" icon="radar" onClick={() => setSelectedKPI({ title: 'Misi Dalam Penanganan', data: incidents.filter(i=>normalizeStatus(i.status)!=='COMPLETED') })} />
+              <KPIBlock label="Korban" value={stats.affected} color="text-orange-600" icon="users" onClick={() => setSelectedKPI({ title: 'Jiwa Terdampak', data: incidents.filter(i=>i.affected_people > 0) })} />
+            </div>
 
-        {/* TACTICAL HUD MAP (PRD Hal 1) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-           <div className="lg:col-span-8 h-[400px] md:h-[550px] bg-white rounded-[40px] border-[10px] border-white shadow-2xl relative overflow-hidden">
-              <MapContainer center={[-7.15, 110.14]} zoom={8} className="h-full w-full" zoomControl={false}>
-                <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}" />
-                <ZoomControl position="bottomright" />
-                {data.map((inc) => {
-                  const lat = parseFloat(inc.latitude);
-                  const lng = parseFloat(inc.longitude);
-                  if (isNaN(lat) || isNaN(lng)) return null;
-                  const isCritical = inc.priority_score > 1000 || inc.priority_level === 'CRITICAL';
-                  return (
-                    <CircleMarker 
-                      key={inc.id || Math.random()} 
-                      center={[lat, lng]} 
-                      radius={isCritical ? 14 : 10} 
-                      pathOptions={{ 
-                        fillColor: inc.status === 'COMPLETED' ? '#1e293b' : '#ef4444', 
-                        color: 'white', weight: 3, fillOpacity: 0.8,
-                        className: isCritical ? 'animate-pulse' : '' 
-                      }}
-                    >
-                      <Popup className="premium-popup">
-                         <div className="w-64 p-2 font-sans">
-                            <h4 className="font-black text-[#006432] uppercase italic text-xs border-b pb-2 mb-2">{inc.title}</h4>
-                            <div className="bg-slate-50 p-3 rounded-2xl text-[10px] italic border mb-4">"{inc.kondisi_mutakhir || "Laporan terverifikasi sistem."}"</div>
-                            <button onClick={() => downloadSITREP(inc)} className="w-full bg-[#c5a059] text-white py-2 rounded-xl text-[8px] font-black uppercase shadow-md mb-2">Unduh Sitrep PDF</button>
-                            <LifeCycleStatus currentStatus={inc.status} />
-                         </div>
-                      </Popup>
-                    </CircleMarker>
-                  );
-                })}
-              </MapContainer>
-           </div>
-           
-           {/* MISSION PROGRESS FEED (PRD PILAR 2) */}
-           <div className="lg:col-span-4 bg-[#006432] rounded-[3rem] p-8 text-white h-[400px] md:h-[550px] flex flex-col shadow-2xl relative border-t-[12px] border-[#c5a059] overflow-hidden">
-              <h3 className="font-black uppercase italic border-b border-white/20 pb-4 text-xs mb-6 flex items-center gap-3">
-                <span className="w-2 h-2 bg-red-500 rounded-full animate-ping"></span>
-                Mission Progress Feed
-              </h3>
-              <div className="flex-1 overflow-y-auto space-y-8 custom-scrollbar pr-2">
-                {data.length > 0 ? data.map((inc) => (
-                  <div key={inc.id || Math.random()} className="relative pl-6 border-l border-white/10 pb-2 group">
-                     <div className="absolute -left-[4.5px] top-0 w-2 h-2 rounded-full bg-[#c5a059] shadow-[0_0_10px_#c5a059]"></div>
-                     <p className="text-[9px] font-bold text-white/40 uppercase leading-none mb-1">
-                       {inc.createdAt ? new Date(inc.createdAt).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '--:--'}
-                     </p>
-                     <h4 className="text-xs font-bold leading-tight group-hover:text-[#c5a059] transition-colors">{inc.title}</h4>
-                     <div className="flex items-center gap-2 mt-2">
-                        <span className="text-[7px] font-black bg-white/10 px-2 py-0.5 rounded-full uppercase">{inc.status}</span>
-                        <span className="text-[7px] text-white/30 italic font-bold">{inc.region}</span>
+            {/* PILLAR 2: GOOGLE-STYLE WEATHER HUB */}
+            <div className="bg-gradient-to-br from-[#006432] via-[#007a3d] to-[#004d26] rounded-[2rem] shadow-xl overflow-hidden">
+               {/* Current Weather - Full Width */}
+               <div className="p-6 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                     {weather.current && (
+                        <>
+                           <div>
+                              <p className="text-5xl font-black text-white italic">{Math.round(weather.current.main.temp)}°</p>
+                              <p className="text-white/70 text-sm">Feels like {Math.round(weather.current.main.feels_like)}°</p>
+                           </div>
+                           <img src={`https://openweathermap.org/img/wn/${weather.current.weather[0].icon}@4x.png`} className="w-20 h-20" />
+                        </>
+                     )}
+                  </div>
+                  <div className="text-right">
+                     <p className="text-white/90 text-xl font-medium">{location.name}</p>
+                     <p className="text-white/50 text-sm">{weather.current?.weather[0]?.main || 'Clear'}</p>
+                  </div>
+               </div>
+               
+               {/* Hourly Forecast - Clean Horizontal Bar */}
+               <div className="px-4 py-3 bg-white/10 flex gap-3 overflow-x-auto scrollbar-hide">
+                  {weather.hourly.slice(0, 12).map((h, i) => (
+                     <div key={i} className="flex-shrink-0 flex flex-col items-center gap-1 min-w-[50px]">
+                        <span className="text-white/60 text-xs">{new Date(h.dt * 1000).getHours()}:00</span>
+                        <img src={`https://openweathermap.org/img/wn/${h.weather[0].icon}.png`} className="w-8 h-8" />
+                        <span className="text-white font-semibold text-sm">{Math.round(h.main.temp)}°</span>
                      </div>
+                  ))}
+               </div>
+               
+               {/* Daily Forecast + Details Grid */}
+               <div className="bg-white">
+                  <div className="p-4">
+                     {weather.daily.slice(0, 7).map((d, i) => (
+                        <div key={i} className="flex items-center justify-between py-3 border-b border-slate-100 last:border-0">
+                           <span className="text-slate-600 font-medium w-16">{i === 0 ? 'Today' : new Date(d.dt * 1000).toLocaleDateString('id-ID', { weekday: 'short' })}</span>
+                           <img src={`https://openweathermap.org/img/wn/${d.weather[0].icon}.png`} className="w-8 h-8 -mx-2" />
+                           <div className="flex items-center gap-2 flex-1 justify-end">
+                              <span className="text-slate-800 font-semibold">{Math.round(d.main.temp_max)}°</span>
+                              <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                 <div className="h-full bg-gradient-to-r from-blue-400 to-red-400" style={{ width: `${((d.main.temp_max - d.main.temp_min) / 40) * 100}%` }}></div>
+                              </div>
+                              <span className="text-slate-400 font-medium">{Math.round(d.main.temp_min)}°</span>
+                           </div>
+                        </div>
+                     ))}
                   </div>
-                )) : <div className="text-center py-20 text-white/20 font-black text-[10px] uppercase">Radar Wilayah Clear</div>}
-              </div>
-           </div>
-        </div>
-
-        {/* BOTTOM SECTION: News & Gap Analysis (PRD HAL 4) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-           {/* AI NEWS SCRAPER */}
-           <div className="bg-white p-8 rounded-[40px] border-t-[12px] border-red-600 shadow-xl h-[450px] flex flex-col overflow-hidden">
-              <h3 className="font-black text-slate-800 uppercase italic border-b pb-4 text-xs mb-6 tracking-tighter">AI Intelligence Scraper & EWS</h3>
-              <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar pr-2">
-                {news.length > 0 ? news.map((n) => (
-                  <div key={n.id} className="p-4 bg-slate-50 rounded-[2rem] border border-slate-100 hover:border-[#c5a059] transition-all cursor-default">
-                    <span className="text-[7px] font-black px-2 py-1 bg-red-100 text-red-700 rounded-lg uppercase">{n.category || 'SCRAPER'}</span>
-                    <h4 className="text-xs font-bold mt-2 leading-tight text-slate-700">{n.title}</h4>
-                    <p className="text-[8px] text-slate-400 mt-2 uppercase font-black">{n.source} • {n.date ? new Date(n.date).toLocaleDateString() : ''}</p>
+                  
+                  {/* Weather Details Bar */}
+                  <div className="p-4 pt-0 grid grid-cols-4 gap-4">
+                     <WeatherDetailBar label="Wind" value={weather.current ? `${weather.current.wind.speed} m/s` : '--'} />
+                     <WeatherDetailBar label="Humidity" value={weather.current ? `${weather.current.main.humidity}%` : '--'} />
+                     <WeatherDetailBar label="Pressure" value={weather.current ? `${weather.current.main.pressure} hPa` : '--'} />
+                     <WeatherDetailBar label="Visibility" value={weather.current ? `${(weather.current.visibility / 1000).toFixed(1)} km` : '--'} />
                   </div>
-                )) : <div className="text-center py-20 text-slate-300 font-black text-[10px] uppercase animate-pulse">Scanning Media...</div>}
-              </div>
-           </div>
+               </div>
+            </div>
 
-           {/* GAP ANALYSIS */}
-           <div className="bg-white p-8 rounded-[40px] border-t-[12px] border-[#c5a059] shadow-xl h-[450px] flex flex-col">
-              <h3 className="font-black text-slate-800 uppercase italic mb-8 text-xs border-b pb-4 tracking-tighter">Gap Analysis Bantuan (Needs vs Dist)</h3>
-              <div className="flex-1 overflow-y-auto space-y-6 custom-scrollbar pr-2">
-                {data.filter(i => i.status !== 'COMPLETED').slice(0, 4).map((inc) => (
-                   <div key={inc.id || Math.random()} className="p-5 bg-slate-50 rounded-[2.5rem] border border-slate-100">
-                      <h4 className="text-[10px] font-black text-slate-700 uppercase mb-3 truncate">{inc.title}</h4>
-                      <NeedsDistributionGauge needs={inc.needs} distribution={inc.distribution} />
-                   </div>
-                ))}
-              </div>
-              <button className="w-full bg-[#006432] text-white font-black py-4 rounded-3xl text-[10px] uppercase shadow-xl mt-6 active:scale-95 transition-all">Sinergi Donasi LAZISNU</button>
-           </div>
-        </div>
+            {/* PILLAR 3 & 4: MAPS & MISSION FEED */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+               <div className="lg:col-span-8 h-[500px] md:h-[650px] bg-white rounded-[3.5rem] border-[12px] border-white shadow-2xl relative overflow-hidden ring-1 ring-slate-100">
+                  <MapDisplay incidents={incidents} />
+               </div>
+
+               <div className="lg:col-span-4 bg-white p-8 rounded-[3.5rem] shadow-2xl h-[500px] md:h-[650px] flex flex-col border-b-[15px] border-red-600">
+                  <h3 className="text-[11px] font-black uppercase text-slate-400 italic tracking-[0.3em] flex items-center gap-3 mb-8">
+                     <i className="fas fa-satellite-dish animate-pulse text-red-600"></i> Active Mission Feed
+                  </h3>
+                  <div className="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar">
+                     {incidents.sort((a,b)=>b.id-a.id).map((inc, i) => (
+                        <div key={i} className="p-6 bg-slate-50 rounded-[2.2rem] border-l-[6px] border-[#006432] hover:bg-white hover:shadow-xl transition-all relative group overflow-hidden">
+                           <p className="text-[9px] font-black text-slate-400 uppercase mb-2">{formatTacticalTime(inc.created_at)}</p>
+                           <h4 className="text-xs font-black text-slate-800 uppercase leading-relaxed group-hover:text-[#006432] transition-colors">{inc.title}</h4>
+                           <div className="flex justify-between items-center mt-5">
+                              <span className={`text-[8px] px-3 py-1 rounded-full font-black uppercase ${normalizeStatus(inc.status)==='COMPLETED'?'bg-green-100 text-green-600':'bg-red-100 text-red-600 animate-pulse'}`}>
+                                 {normalizeStatus(inc.status)}
+                              </span>
+                              <button className="text-[10px] font-black text-[#c5a059] uppercase hover:underline">Analysis ➔</button>
+                           </div>
+                        </div>
+                     ))}
+                  </div>
+               </div>
+            </div>
+
+            {/* PILLAR 5: INVENTORY PREVIEW */}
+            <div>
+               <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-black text-slate-800 uppercase italic">Resource Overview</h3>
+                  <button onClick={() => setActiveTab('resource')} className="text-[10px] font-bold text-[#006432] uppercase hover:underline">View All</button>
+               </div>
+               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {displayedInventory.map((item, i) => (
+                     <div key={i} className="bg-white p-4 rounded-2xl shadow-sm text-center">
+                        <p className="text-xs text-slate-400 uppercase">{item.category}</p>
+                        <p className="text-2xl font-black text-[#006432]">{item.quantity || 0}</p>
+                     </div>
+                  ))}
+               </div>
+            </div>
+
+            {/* PILLAR 6: NEWS TICKER */}
+            {displayedNews.length > 0 && (
+               <NewsTicker news={displayedNews} />
+            )}
+          </div>
+        ) : activeTab === 'resource' ? (
+          <div className="max-w-[1600px] mx-auto animate-in fade-in duration-500">
+            <InventoryView onBack={() => setActiveTab('home')} />
+          </div>
+        ) : (
+          <div className="max-w-[1600px] mx-auto animate-in fade-in duration-500">
+            <DisasterTrendAnalyzer user={null} />
+          </div>
+        )}
       </main>
 
-      {/* FIXED NAVIGATION */}
-      <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md border-t flex items-center justify-around z-[5000] shadow-[0_-5px_20px_rgba(0,0,0,0.05)]">
-        <NavBtn icon="home" label="Dashboard" active />
-        <div className="relative -top-5">
-           <button onClick={() => window.location.href='/lapor'} className="w-16 h-16 bg-red-600 rounded-full shadow-2xl flex items-center justify-center text-white border-4 border-white active:scale-90 transition-all shadow-red-200">
-             <i className="fas fa-bullhorn text-xl"></i>
-           </button>
-           <p className="text-[8px] font-black text-center mt-1 uppercase text-red-600 tracking-tighter">Lapor Cepat</p>
+      {/* --- FOOTER TACTICAL NAV (FULLY ACTIVE) --- */}
+      <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[92%] md:w-[500px] h-20 bg-white/90 backdrop-blur-2xl border border-white/50 flex items-center justify-around z-[6000] px-8 rounded-[2.5rem] shadow-2xl">
+        <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-1 ${activeTab === 'home' ? 'text-[#006432]' : 'text-slate-300'}`}>
+          <i className="fas fa-house text-2xl"></i><span className="text-[10px] font-black uppercase">Home</span>
+        </button>
+        <div className="relative -top-12">
+          <button 
+            onClick={onOpenReport || (() => window.location.href = '/lapor')} 
+            className="w-24 h-24 bg-gradient-to-br from-red-600 to-red-800 rounded-full shadow-[0_20px_40px_rgba(220,38,38,0.5)] flex flex-col items-center justify-center text-white border-[10px] border-white active:scale-95 transition-all hover:rotate-12 group"
+          >
+            <i className="fas fa-bullhorn text-3xl mb-1 group-hover:animate-bounce"></i>
+            <span className="text-[8px] font-black uppercase tracking-widest">REPORT</span>
+          </button>
         </div>
-        <NavBtn icon="user-circle" label="Akses Admin" onClick={onOpenLogin} />
+        <button 
+          onClick={() => setActiveTab('resource')} 
+          className={`flex flex-col items-center gap-1 transition-all duration-500 ${activeTab === 'resource' ? 'text-[#006432]' : 'text-slate-300 hover:text-[#006432]'}`}
+        >
+          <i className="fas fa-boxes-nodes text-2xl"></i>
+          <span className="text-[10px] font-black uppercase tracking-[0.1em]">Resource</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('trends')} 
+          className={`flex flex-col items-center gap-1 transition-all duration-500 ${activeTab === 'trends' ? 'text-[#006432]' : 'text-slate-300 hover:text-[#006432]'}`}
+        >
+          <i className="fas fa-chart-line text-2xl"></i>
+          <span className="text-[10px] font-black uppercase tracking-[0.1em]">Tren</span>
+        </button>
       </nav>
     </div>
   );
 };
 
-// UI ATOMS
-const KPIBox = ({ label, value, color, icon }) => (
-  <div className="bg-white p-5 rounded-[30px] shadow-lg flex flex-col items-center justify-center text-center group border border-slate-50">
-    <div className="w-10 h-10 rounded-2xl mb-2 flex items-center justify-center bg-slate-50 group-hover:bg-[#006432]/10 transition-colors">
-      <i className={`fas fa-${icon} ${color} text-xs`}></i>
-    </div>
-    <p className={`text-xl font-black ${color} tracking-tighter leading-none`}>{value}</p>
-    <p className="text-[8px] font-black text-slate-400 uppercase mt-2 tracking-widest">{label}</p>
+// --- MINI COMPONENTS ---
+const KPIBlock = ({ label, value, color, icon, onClick }) => (
+  <div onClick={onClick} className="bg-white p-5 md:p-8 rounded-2xl shadow-md flex flex-col items-center justify-center text-center active:scale-95 transition-all cursor-pointer">
+    <div className="w-10 h-10 rounded-xl mb-2 bg-slate-50 flex items-center justify-center"><i className={`fas fa-${icon} ${color} text-lg`}></i></div>
+    <p className={`text-2xl font-black ${color} tracking-tighter`}>{value}</p>
+    <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wider mt-1">{label}</p>
   </div>
 );
 
-const NavBtn = ({ icon, label, active, onClick }) => (
-  <button onClick={onClick} className={`flex flex-col items-center gap-1 flex-1 ${active ? 'text-[#006432]' : 'text-slate-300'}`}>
-    <i className={`fas fa-${icon} text-lg`}></i>
-    <span className="text-[8px] font-black uppercase tracking-widest leading-none">{label}</span>
-  </button>
+const WeatherDetailBar = ({ label, value }) => (
+  <div className="text-center">
+    <p className="text-slate-400 text-xs">{label}</p>
+    <p className="text-slate-800 font-semibold text-sm">{value}</p>
+  </div>
 );
 
 export default PublicDashboard;

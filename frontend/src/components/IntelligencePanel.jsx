@@ -2,18 +2,18 @@ import React from 'react';
 
 const IntelligencePanel = () => {
   return (
-    <div className="w-72 bg-gradient-to-br from-white/90 to-slate-50/40 backdrop-blur-md p-5 rounded-[32px] shadow-[0_20px_50px_rgba(0,0,0,0.1)] border border-white/60 pointer-events-auto animate-in slide-in-from-left duration-700">
-      <div className="flex items-center gap-2 mb-4 border-b border-nu-green/10 pb-2">
+    <div className="w-full max-w-sm bg-white/95 backdrop-blur-md p-4 rounded-2xl shadow-lg border border-slate-100 pointer-events-auto animate-in slide-in-from-left duration-700">
+      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-nu-green/10">
         <div className="w-2 h-2 bg-red-500 rounded-full animate-ping"></div>
         <h2 className="text-[10px] font-black text-nu-green uppercase tracking-widest leading-none">Intelligence Feed</h2>
       </div>
-      
-      <div className="space-y-4">
+       
+      <div className="space-y-3 max-h-48 overflow-y-auto custom-scrollbar">
         <SensorItem name="S. Wulan (Demak)" level="710" status="SIAGA 1" color="text-red-600" />
         <SensorItem name="S. Juwana (Pati)" level="450" status="NORMAL" color="text-green-600" />
       </div>
-
-      <div className="mt-4 pt-3 border-t border-slate-100">
+      
+      <div className="mt-3 pt-2 border-t border-slate-100">
          <p className="text-[8px] font-bold text-slate-400 uppercase italic">Seismik Regional: Aman</p>
       </div>
     </div>

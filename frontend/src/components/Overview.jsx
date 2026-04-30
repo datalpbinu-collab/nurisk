@@ -1,11 +1,11 @@
 import React from 'react';
 
-const Overview = ({ incidents }) => {
+const Overview = ({ incidents, onNavigate }) => {
   const stats = [
-    { label: 'Total Incident', value: incidents.length, color: 'text-blue-500', icon: 'bullhorn' },
-    { label: 'In Assessment', value: incidents.filter(i => i.status === 'assessment').length, color: 'text-yellow-500', icon: 'file-invoice' },
-    { label: 'Active Response', value: incidents.filter(i => i.status === 'responded').length, color: 'text-green-500', icon: 'shipping-fast' },
-    { label: 'Closed/Success', value: incidents.filter(i => i.status === 'completed').length, color: 'text-slate-400', icon: 'check-double' }
+    { id: 'command', label: 'Total Incident', value: incidents.length, color: 'text-blue-500', icon: 'bullhorn' },
+    { id: 'manager', label: 'In Assessment', value: incidents.filter(i => i.status === 'assessment').length, color: 'text-yellow-500', icon: 'file-invoice' },
+    { id: 'manager', label: 'Active Response', value: incidents.filter(i => i.status === 'responded').length, color: 'text-green-500', icon: 'shipping-fast' },
+    { id: 'manager', label: 'Closed/Success', value: incidents.filter(i => i.status === 'completed').length, color: 'text-slate-400', icon: 'check-double' }
   ];
 
   return (
@@ -17,7 +17,11 @@ const Overview = ({ incidents }) => {
       {/* WIDGET STATISTIK */}
       <div className="grid grid-cols-4 gap-6 mb-8">
         {stats.map(s => (
-          <div key={s.label} className="bg-[#1e293b] p-6 rounded-3xl border border-slate-800 shadow-2xl hover:border-green-900 transition-all">
+          <div 
+            key={s.label} 
+            onClick={() => onNavigate?.(s.id)}
+            className="bg-[#1e293b] p-6 rounded-3xl border border-slate-800 shadow-2xl hover:border-green-900 transition-all cursor-pointer"
+          >
             <div className="flex justify-between items-center mb-2">
                <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">{s.label}</p>
                <i className={`fas fa-${s.icon} text-slate-700 text-xs`}></i>
