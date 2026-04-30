@@ -13,7 +13,7 @@ const getBaseURL = () => {
     console.log('[API] Using Capacitor URL:', url);
     return url;
   }
-  const url = 'http://localhost:7860/api/';
+  const url = import.meta.env.PROD ? '/api/' : 'http://localhost:7860/api/';
   console.log('[API] Using default URL:', url);
   return url;
 };
