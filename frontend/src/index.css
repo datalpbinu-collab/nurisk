@@ -200,3 +200,26 @@ main {
 html { font-size: 14px; }
 @media (min-width: 768px) { html { font-size: 15px; } }
 @media (min-width: 1280px) { html { font-size: 16px; } }
+
+/* --- 13. LEAFLET LAYERS CONTROL MOBILE FIX --- */
+/* Limit height of the expanded layers panel on small screens */
+.leaflet-control-layers-expanded {
+  max-height: 40vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+@media (max-width: 767px) {
+  .leaflet-control-layers-expanded {
+    max-height: 35vh;
+    font-size: 11px;
+    width: 180px;
+  }
+  /* Separate layers control from zoom buttons */
+  .leaflet-bottom.leaflet-right {
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: flex-end;
+    gap: 6px;
+    padding-bottom: 56px; /* clear bottom nav */
+  }
+}

@@ -88,6 +88,8 @@ const MapDisplay = ({ incidents = [], onSelect }) => {
   const [historicalHotspots, setHistoricalHotspots] = useState([]);
   const [radarTime, setRadarTime] = useState(null);
   const [geoJsonData, setGeoJsonData] = useState(null);
+  const [legendOpen, setLegendOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const [historicalFilterRegion, setHistoricalFilterRegion] = useState('all');
   const [historicalFilterDisasterType, setHistoricalFilterDisasterType] = useState('all');
@@ -174,22 +176,33 @@ const MapDisplay = ({ incidents = [], onSelect }) => {
   return (
     <div className="h-full w-full relative bg-[#f1f5f9]">
       
-      <div className="absolute bottom-10 left-6 z-[1000] pointer-events-none" style={{ maxHeight: 'calc(100% - 100px)' }}>
-        <div className="bg-white/90 backdrop-blur-md p-5 rounded-[2rem] border-2 border-[#006432]/10 shadow-2xl w-56 overflow-y-auto custom-scrollbar pointer-events-auto" style={{ maxHeight: 'calc(100vh - 180px)' }}>
-           <div className="flex items-center gap-3 border-b border-slate-100 pb-2">
-              <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></div>
-              <span className="text-[10px] font-black text-[#006432] uppercase tracking-[0.1em]">Disaster Legend</span>
-           </div>
-           <div className="space-y-2.5 mt-3">
+      {/* Legend / Filter Panel */}
+      <div className="absolute bottom-12 left-2 md:bottom-10 md:left-4 z-[1000] pointer-events-none flex flex-col items-start">
+        {/* Collapsible Panel — renders ABOVE the button */}
+        {legendOpen && (
+          <div className="pointer-events-auto bg-white/97 backdrop-blur-md rounded-2xl border border-[#006432]/10 shadow-2xl w-44 md:w-56 mb-2 overflow-hidden">
+            {/* Legend items */}
+            <div className="p-3 space-y-2">
+              <p className="text-[8px] font-black text-[#006432] uppercase tracking-widest mb-1">Legenda</p>
               <LegendItem icon="triangle" color="bg-orange-500" label="Vulkanik (AI)" />
-              <LegendItem icon="circle" color="bg-red-600" label="Seismik (BMKG)" />
-              <LegendItem icon="square" color="bg-[#006432]" label="Misi Terverifikasi" />
-              <LegendItem icon="fire" color="bg-yellow-500" label="Historis (Heatmap)" />
-              {/* Filter UI for Historical Hotspots */}
-              <div className="pt-4 border-t border-slate-100 mt-4">
-                <p className="text-[8px] font-black text-slate-400 uppercase mb-2 italic">Filter Historis</p>
+              <LegendItem icon="circle"   color="bg-red-600"    label="Seismik (BMKG)" />
+              <LegendItem icon="square"   color="bg-[#006432]"  label="Misi Terverifikasi" />
+              <LegendItem icon="fire"     color="bg-yellow-500" label="Historis (Heatmap)" />
+            </div>
+
+            {/* Filter sub-toggle */}
+            <button
+              onClick={() => setFilterOpen(prev => !prev)}
+              className="w-full flex items-center justify-between px-3 py-2 bg-slate-50 border-t border-slate-100 text-[8px] font-black text-slate-500 uppercase tracking-wider hover:bg-slate-100 transition-colors pointer-events-auto"
+            >
+              <span>⚙ Filter Historis</span>
+              <span>{filterOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {filterOpen && (
+              <div className="p-3 pt-2 space-y-1.5 max-h-[30vh] overflow-y-auto custom-scrollbar">
                 <select
-                  className="w-full p-2 bg-slate-50 rounded-lg text-[9px] font-bold mb-2"
+                  className="w-full p-1.5 bg-slate-50 rounded-lg text-[9px] font-bold border-0 outline-none"
                   value={historicalFilterRegion}
                   onChange={(e) => setHistoricalFilterRegion(e.target.value)}
                 >
@@ -199,43 +212,46 @@ const MapDisplay = ({ incidents = [], onSelect }) => {
                   ))}
                 </select>
                 <select
-                  className="w-full p-2 bg-slate-50 rounded-lg text-[9px] font-bold mb-2"
+                  className="w-full p-1.5 bg-slate-50 rounded-lg text-[9px] font-bold border-0 outline-none"
                   value={historicalFilterDisasterType}
                   onChange={(e) => setHistoricalFilterDisasterType(e.target.value)}
                 >
-                  <option value="all">Semua Jenis Bencana</option>
+                  <option value="all">Semua Jenis</option>
                   {DISASTER_TYPES.map((type) => (
                     <option key={type} value={type}>{type}</option>
                   ))}
                 </select>
                 <input
                   type="date"
-                  className="w-full p-2 bg-slate-50 rounded-lg text-[9px] font-bold mb-2"
+                  className="w-full p-1.5 bg-slate-50 rounded-lg text-[9px] font-bold border-0 outline-none"
                   value={historicalFilterStartDate}
                   onChange={(e) => setHistoricalFilterStartDate(e.target.value)}
                   title="Tanggal Mulai"
                 />
                 <input
                   type="date"
-                  className="w-full p-2 bg-slate-50 rounded-lg text-[9px] font-bold mb-2"
+                  className="w-full p-1.5 bg-slate-50 rounded-lg text-[9px] font-bold border-0 outline-none"
                   value={historicalFilterEndDate}
                   onChange={(e) => setHistoricalFilterEndDate(e.target.value)}
                   title="Tanggal Akhir"
                 />
                 <button
                   onClick={syncIntelligence}
-                  className="w-full bg-[#006432] text-white py-2 rounded-lg text-[9px] font-black uppercase mt-2"
-                >Terapkan Filter</button>
+                  className="w-full bg-[#006432] text-white py-1.5 rounded-lg text-[9px] font-black uppercase hover:bg-[#005028] transition-colors"
+                >Terapkan</button>
               </div>
-              <div className="pt-2">
-                 <p className="text-[8px] font-black text-slate-400 uppercase mb-2 italic">Terrain &amp; Hydro Arsir</p>
-                 <div className="flex items-center gap-2">
-                    <div className="w-full h-1.5 bg-gradient-to-r from-blue-300 via-blue-600 to-indigo-900 rounded-full opacity-60"></div>
-                    <span className="text-[8px] font-bold text-slate-500 uppercase">Risk</span>
-                 </div>
-              </div>
-           </div>
-        </div>
+            )}
+          </div>
+        )}
+
+        {/* Main Toggle Button */}
+        <button
+          onClick={() => setLegendOpen(prev => !prev)}
+          className="pointer-events-auto flex items-center gap-1.5 bg-white/95 backdrop-blur-md border border-[#006432]/20 shadow-lg rounded-xl px-3 py-1.5 text-[9px] font-black text-[#006432] uppercase tracking-wider hover:bg-[#006432] hover:text-white transition-all duration-200"
+        >
+          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+          {legendOpen ? '✕ Tutup' : '☰ Legenda'}
+        </button>
       </div>
 
 
@@ -245,7 +261,7 @@ const MapDisplay = ({ incidents = [], onSelect }) => {
       >
         <MapEngine />
         
-        <LayersControl position="topright">
+        <LayersControl position="bottomright">
           {/* Overlay Batas Wilayah Administrasi */}
           <LayersControl.Overlay name="🗺️ Batas Kota/Kabupaten">
             {geoJsonData && (

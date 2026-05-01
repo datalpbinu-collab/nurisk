@@ -147,12 +147,12 @@ const PublicDashboard = ({ incidents = [], inventory = [], onOpenLogin, onOpenRe
 
               {/* Mission Feed */}
               <div className="lg:col-span-4 flex flex-col">
-                <Card className="flex-1 flex flex-col h-[400px] md:h-[520px]">
-                  <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+                <Card className="flex-1 flex flex-col h-[400px] md:h-[520px] overflow-hidden">
+                  <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2 shrink-0">
                     <Satellite size={14} className="text-red-500 animate-pulse" />
                     <h3 className="text-xs font-black text-slate-600 uppercase tracking-widest">Active Mission Feed</h3>
                   </div>
-                  <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+                  <div className="flex-1 min-h-0 max-h-[350px] md:max-h-[450px] overflow-y-auto p-3 space-y-2 custom-scrollbar">
                     {incidents.length === 0 && (
                       <p className="text-slate-400 text-xs text-center py-8">Tidak ada data</p>
                     )}
