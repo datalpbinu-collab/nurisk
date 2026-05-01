@@ -243,8 +243,8 @@ app.use('/api/reports', require('./src/routes/reportRoutes'));
 app.use('/api/historical-data', require('./src/routes/historicalDataRoutes'));
 
 // Protected routes (require authentication)
-app.use('/api/incidents', authMiddleware, require('./src/routes/incidentRoutes'));
-app.use('/api/inventory', authMiddleware, require('./src/routes/inventoryRoutes'));
+app.use('/api/incidents', require('./src/routes/incidentRoutes'));
+app.use('/api/inventory', require('./src/routes/inventoryRoutes'));
 app.use('/api/logistics', authMiddleware, require('./src/routes/logisticsRoutes'));
 app.use('/api/maps', authMiddleware, require('./src/routes/mapRoutes'));
 app.use('/api/news', authMiddleware, require('./src/routes/newsRoutes'));
@@ -253,7 +253,7 @@ app.use('/api/volunteers', require('./src/routes/volunteerRoutes'));
 app.use('/api/chat', authMiddleware, require('./src/routes/chatRoutes'));
 app.use('/api/notifications', authMiddleware, require('./src/routes/notificationRoutes'));
 app.use('/api/assets', authMiddleware, require('./src/routes/assetRoutes'));
-app.use('/api/analytics', authMiddleware, require('./src/routes/analyticsRoutes'));
+app.use('/api/analytics', require('./src/routes/analyticsRoutes'));
 app.use('/api/shelters', authMiddleware, require('./src/routes/shelterRoutes'));
 app.use('/api/buildings', authMiddleware, require('./src/routes/buildingRoutes'));
 app.use('/api/dashboard', authMiddleware, require('./src/routes/dashboardRoutes'));

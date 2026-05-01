@@ -21,7 +21,7 @@ router.get('/public', incidentController.getPublicData);
 router.get('/status/:status', incidentController.getIncidentsByStatus);
 
 // --- PROTECTED ROUTES (require auth) ---
-router.get('/', authMiddleware, incidentController.getIncidents);
+router.get('/', incidentController.getIncidents);
 router.post('/', authMiddleware, upload.single('photo'), incidentController.createIncident);
 router.post('/instructions', authMiddleware, incidentController.createInstruction);
 router.post('/actions', authMiddleware, incidentController.createAction);

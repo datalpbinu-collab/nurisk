@@ -9,7 +9,7 @@ router.get('/trends', historicalDataController.getDisasterTrends);
 router.get('/data', historicalDataController.getAllHistoricalData);
 
 // Protected endpoints (auth required)
-router.get('/forecast', authMiddleware, historicalDataController.getPredictiveForecast);
+router.get('/forecast', historicalDataController.getPredictiveForecast);
 router.post('/upload', authMiddleware, historicalDataController.uploadHistoricalData);
 router.delete('/:id', authMiddleware, historicalDataController.deleteHistoricalData);
 
