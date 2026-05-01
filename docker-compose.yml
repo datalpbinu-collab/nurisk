@@ -31,6 +31,8 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       PORT: 7860
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:4173}
+      SECRET_KEY_PWNU: ${SECRET_KEY_PWNU:-NuPeDuLi1926}
+      SECRET_KEY_PCNU: ${SECRET_KEY_PCNU:-PC1926}
     depends_on:
       db:
         condition: service_healthy

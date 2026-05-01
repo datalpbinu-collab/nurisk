@@ -1,50 +1,90 @@
 const axios = require('axios');
+const path = require('path');
+const fs = require('fs');
 const pointInPolygon = require('point-in-polygon');
 
 let jatengRegencies = [];
 
-const loadJatengGeoJSON = async () => {
-    try {
-        console.log("[GEOJSON] Loading Jawa Tengah regency boundaries...");
-        const response = await axios.get('https://raw.githubusercontent.com/superpikar/indonesia-geojson/master/indonesia-regencies-cities.json');
-        const allFeatures = response.data.features;
+const LOCAL_GEOJSON_PATH = path.join(__dirname, '../data/jateng-kabupaten.geojson');
 
-        // Filter for Jawa Tengah regencies/cities
-        jatengRegencies = allFeatures.filter(feature => {
-            const region = feature.properties.region || feature.properties.propinsi;
-            return region && region.toUpperCase() === 'JAWA TENGAH';
-        }).map(feature => {
-            // Normalize name and extract geometry
-            const name = feature.properties.name || feature.properties.NAME_2;
-            return {
-                name: name,
-                geometry: feature.geometry
-            };
-        });
-        console.log(`✅ [GEOJSON] Loaded ${jatengRegencies.length} regencies for Jawa Tengah.`);
-    } catch (error) {
-        console.error("[GEOJSON] Failed to load or parse GeoJSON data:", error.message);
-        jatengRegencies = []; // Ensure it's empty on failure
+const loadJatengGeoJSON = async () => {
+  console.log('[GEOJSON] Loading Jawa Tengah regency boundaries...');
+
+  // ── 1. Coba file lokal dulu (paling cepat & reliable) ──────────────────────
+  try {
+    if (fs.existsSync(LOCAL_GEOJSON_PATH)) {
+      const raw = fs.readFileSync(LOCAL_GEOJSON_PATH, 'utf-8');
+      const data = JSON.parse(raw);
+      if (data?.features?.length > 0) {
+        jatengRegencies = mapFeatures(data.features);
+        console.log(`✅ [GEOJSON] Loaded ${jatengRegencies.length} regencies from local file.`);
+        return;
+      }
     }
+  } catch (e) {
+    console.warn('[GEOJSON] Local file read failed:', e.message);
+  }
+
+  // ── 2. Fallback: download dari GADM (sumber terpercaya) ────────────────────
+  try {
+    console.log('[GEOJSON] Local file not found. Fetching from GADM...');
+    const res = await axios.get(
+      'https://geodata.ucdavis.edu/gadm/gadm4.1/json/gadm41_IDN_2.json',
+      { timeout: 20000 }
+    );
+    const features = res.data?.features?.filter(f => f.properties.NAME_1 === 'JawaTengah') || [];
+
+    if (features.length > 0) {
+      const mapped = features.map(f => ({
+        type: 'Feature',
+        properties: { name: f.properties.NAME_2 },
+        geometry: f.geometry
+      }));
+      jatengRegencies = mapFeatures(mapped);
+
+      // Simpan ke lokal agar next restart langsung baca lokal
+      try {
+        fs.mkdirSync(path.dirname(LOCAL_GEOJSON_PATH), { recursive: true });
+        fs.writeFileSync(LOCAL_GEOJSON_PATH, JSON.stringify({ type: 'FeatureCollection', features: mapped }));
+        console.log('[GEOJSON] Cached to local file for future restarts.');
+      } catch { /* ignore write error */ }
+
+      console.log(`✅ [GEOJSON] Loaded ${jatengRegencies.length} regencies from GADM.`);
+      return;
+    }
+  } catch (e) {
+    console.warn('[GEOJSON] GADM fetch failed:', e.message);
+  }
+
+  // ── 3. Semua sumber gagal — server tetap jalan ─────────────────────────────
+  console.warn('[GEOJSON] All sources failed. Point-in-Polygon will be disabled.');
+  jatengRegencies = [];
 };
 
+const mapFeatures = (features) =>
+  features
+    .filter(f => f.geometry)
+    .map(f => ({
+      name: f.properties?.name || f.properties?.NAME_2 || 'Unknown',
+      geometry: f.geometry,
+    }));
+
 const getRegencyByCoordinates = (latitude, longitude) => {
-    if (!jatengRegencies || jatengRegencies.length === 0) {
-        console.warn("[GEOJSON] GeoJSON data not loaded or empty. Cannot perform Point-in-Polygon check.");
-        return null;
-    }
+  if (!jatengRegencies || jatengRegencies.length === 0) return null;
 
-    const point = [longitude, latitude]; // GeoJSON coordinates are [longitude, latitude]
+  const point = [longitude, latitude]; // GeoJSON: [lon, lat]
 
-    for (const regency of jatengRegencies) {
-        const geometry = regency.geometry;
-        if (geometry.type === 'Polygon' && pointInPolygon(point, geometry.coordinates[0])) return regency.name;
-        if (geometry.type === 'MultiPolygon' && geometry.coordinates.some(polygon => pointInPolygon(point, polygon[0]))) return regency.name;
-    }
-    return null; // No regency found
+  for (const regency of jatengRegencies) {
+    try {
+      const { geometry } = regency;
+      if (geometry.type === 'Polygon' && pointInPolygon(point, geometry.coordinates[0])) return regency.name;
+      if (geometry.type === 'MultiPolygon' && geometry.coordinates.some(poly => pointInPolygon(point, poly[0]))) return regency.name;
+    } catch { /* skip malformed */ }
+  }
+  return null;
 };
 
 module.exports = {
-    loadJatengGeoJSON,
-    getRegencyByCoordinates
+  loadJatengGeoJSON,
+  getRegencyByCoordinates,
 };

@@ -1,17 +1,23 @@
-/* --- 1. TAILWIND CORE (V3 STANDARDS) --- */
+/* --- 1. GOOGLE FONTS (must be first) --- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+/* --- 2. TAILWIND CORE --- */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* --- 2. GLOBAL VARIABLES & NATIVE CONFIG --- */
+/* --- 3. GLOBAL VARIABLES --- */
 :root {
   --nu-green: #006432;
+  --nu-green-dark: #005028;
+  --nu-green-light: #e8f5ec;
   --nu-gold: #c5a059;
   --safe-top: env(safe-area-inset-top);
   --safe-bottom: env(safe-area-inset-bottom);
 }
 
-* {
+/* --- 4. BASE RESET --- */
+*, *::before, *::after {
   box-sizing: border-box;
 }
 
@@ -21,39 +27,39 @@ html, body, #root {
   margin: 0;
   padding: 0;
   background-color: #f8fafc;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-#root {
-  display: block;
-}
+#root { display: block; }
 
-.scrolling-y {
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
+button, a { cursor: pointer !important; }
 
-/* Responsif Font Size */
-html { font-size: 14px; }
-@media (min-width: 768px) { html { font-size: 16px; } }
-
-/* --- 3. LAYOUT STRUCTURE (STUCK NAVIGATION) --- */
-
-/* Container Utama */
+/* --- 5. LAYOUT STRUCTURE --- */
 .app-container {
   display: flex;
   flex-direction: column;
   height: 100vh;
   width: 100vw;
+  overflow: hidden;
 }
 
-/* Default scroll behavior */
 main {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-/* --- 4. MOBILE NATIVE OPTIMIZATION --- */
+/* --- 6. SCROLLBAR --- */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 99px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--nu-green); }
+
+/* --- 7. MOBILE SAFE AREA --- */
 .safe-area-inset { padding-top: var(--safe-top); }
 .pb-safe { padding-bottom: var(--safe-bottom); }
 .pt-safe { padding-top: var(--safe-top); }
@@ -63,33 +69,13 @@ main {
   scroll-behavior: smooth;
 }
 
-/* Custom Scrollbar (Sangat Halus & Minimalis) */
-.custom-scrollbar::-webkit-scrollbar { width: 3px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 10px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--nu-green); }
-
-/* Mobile Scroll Fixes */
 .scroll-container {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
 }
 
-.scroll-no-bounce {
-  overscroll-behavior-y: none;
-}
-
-/* Prevent pull-to-refresh on mobile */
-.prevent-pull-refresh {
-  overscroll-behavior-y: none;
-  touch-action: pan-y pan-x;
-}
-
-/* --- 5. MAP & HUD CONFIG --- */
+/* --- 8. MAP CONFIG --- */
 .leaflet-container {
   height: 100% !important;
   width: 100% !important;
@@ -97,79 +83,82 @@ main {
   z-index: 1;
 }
 
-/* --- STATUS COLORS (PER PRD) --- */
-.status-reported { color: #64748b; } /* Abu-abu */
-.status-verified { color: #3b82f6; } /* Biru */
-.status-assessment { color: #eab308; } /* Kuning */
-.status-commanded { color: #f97316; } /* Oranye */
-.status-responded { color: #22c55e; } /* Hijau */
-.status-completed { color: #0f172a; } /* Hitam/Slate */
+/* --- 9. STATUS COLORS --- */
+.status-reported   { color: #64748b; }
+.status-verified   { color: #3b82f6; }
+.status-assessment { color: #eab308; }
+.status-commanded  { color: #f97316; }
+.status-responded  { color: #22c55e; }
+.status-completed  { color: #0f172a; }
+
+/* --- 10. ANIMATIONS --- */
 
 /* Critical Pulse (Marker Berdenyut Merah) */
-.marker-critical-pulse {
-  animation: critical-pulse 1.5s infinite;
-}
+.marker-critical-pulse { animation: critical-pulse 1.5s infinite; }
 
 @keyframes critical-pulse {
-  0% { filter: drop-shadow(0 0 0px #ef4444); }
-  50% { filter: drop-shadow(0 0 15px #ef4444); }
-  100% { filter: drop-shadow(0 0 0px #ef4444); }
+  0%, 100% { filter: drop-shadow(0 0 0px #ef4444); }
+  50%       { filter: drop-shadow(0 0 12px #ef4444); }
 }
 
 @keyframes earthquake-shake {
-  0% { transform: translate(0, 0); }
-  10% { transform: translate(-2px, -2px); }
-  20% { transform: translate(2px, 2px); }
-  30% { transform: translate(-2px, 2px); }
-  40% { transform: translate(2px, -2px); }
-  50% { transform: translate(-2px, 0px); }
-  60% { transform: translate(2px, 0px); }
-  70% { transform: translate(0px, 2px); }
-  80% { transform: translate(0px, -2px); }
-  90% { transform: translate(-1px, 1px); }
+  0%   { transform: translate(0, 0); }
+  10%  { transform: translate(-2px, -2px); }
+  20%  { transform: translate(2px, 2px); }
+  30%  { transform: translate(-2px, 2px); }
+  40%  { transform: translate(2px, -2px); }
+  50%  { transform: translate(-2px, 0px); }
+  60%  { transform: translate(2px, 0px); }
+  70%  { transform: translate(0px, 2px); }
+  80%  { transform: translate(0px, -2px); }
+  90%  { transform: translate(-1px, 1px); }
   100% { transform: translate(0, 0); }
 }
+.shake-alert { animation: earthquake-shake 0.5s ease-in-out infinite; }
 
-.shake-alert {
-  animation: earthquake-shake 0.5s ease-in-out infinite;
+/* Slide-In Bawah */
+@keyframes slide-in-bottom {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.animate-in { animation: slide-in-bottom 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+/* Slide-In Kanan */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+.animate-slide-right { animation: slide-in-right 0.4s ease-out forwards; }
+
+/* Fade-In */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+
+/* Marquee */
+@keyframes marquee {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.animate-marquee {
+  display: inline-block;
+  white-space: nowrap;
+  animation: marquee 40s linear infinite;
 }
 
-/* --- 6. GLASSMORPHISM & SHADOWS --- */
-.glass-panel {
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 8px 32px 0 rgba(0, 100, 50, 0.1);
-}
-
-.glass-ui {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-.premium-shadow {
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-}
-
-/* --- 7. ANIMASI TAKTIS (PULSE, SLIDE, MARQUEE) --- */
-
-/* Pulse Ring untuk Marker Map */
+/* Pulse Ring untuk Map Marker */
 @keyframes pulse-ring {
-  0% { transform: scale(0.5); opacity: 0.8; }
+  0%        { transform: scale(0.5); opacity: 0.8; }
   80%, 100% { transform: scale(2.5); opacity: 0; }
 }
-
 .pulse-marker {
-  width: 12px;
-  height: 12px;
+  width: 12px; height: 12px;
   border-radius: 50%;
   border: 2px solid white;
   position: relative;
 }
-
 .pulse-marker::before {
   content: '';
   position: absolute;
@@ -179,69 +168,35 @@ main {
   animation: pulse-ring 1.5s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
 }
 
-/* Slide-In dari Bawah (Untuk Overlay Mobile) */
-@keyframes slide-in-bottom {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
-}
-
-.animate-in {
-  animation: slide-in-bottom 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-/* Slide-In dari Kanan (Untuk Desktop Sidebar) */
-@keyframes slide-in-right {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
-}
-
-.animate-slide-right {
-  animation: slide-in-right 0.4s ease-out forwards;
-}
-
-/* Marquee (Running Text Log) */
-@keyframes marquee {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
-}
-
-.animate-marquee {
-  display: inline-block;
-  white-space: nowrap;
-  animation: marquee 40s linear infinite;
-}
-
-/* Nav Scaling Effect */
-.active-nav-scale {
-  transform: scale(1.1);
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* Efek Fade In Halus untuk Dashboard */
-.animate-fade-in {
-  animation: fadeIn 0.4s ease-out forwards;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
 @keyframes beacon {
-  0% { transform: scale(1); opacity: 0.8; }
-  50% { transform: scale(1.5); opacity: 0.3; }
-  100% { transform: scale(1); opacity: 0.8; }
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50%       { transform: scale(1.5); opacity: 0.3; }
 }
-
 .reported-pulse {
   animation: beacon 2s infinite;
-  background-color: #64748b !important; /* Warna Abu-abu sesuai PRD */
+  background-color: #64748b !important;
 }
 
-button, a {
-  cursor: pointer !important;
-  pointer-events: auto !important;
+/* --- 11. GLASSMORPHISM --- */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px 0 rgba(0, 100, 50, 0.08);
 }
 
-.premium-popup {
-  z-index: 1000 !important;
+.glass-ui {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
+
+/* --- 12. UTILITIES --- */
+.premium-popup { z-index: 1000 !important; }
+
+/* Responsive font */
+html { font-size: 14px; }
+@media (min-width: 768px) { html { font-size: 15px; } }
+@media (min-width: 1280px) { html { font-size: 16px; } }

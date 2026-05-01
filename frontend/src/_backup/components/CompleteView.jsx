@@ -4,27 +4,20 @@ import autoTable from 'jspdf-autotable';
 import api from '../services/api';
 import { KAB_JATENG } from '../utils/constants'; // Import KAB_JATENG
 
-import { 
-  CloudRain, CloudLightning, Activity, Mountain, 
-  Waves, Sun, Flame, AlertTriangle, Clock,
-  ChevronDown, Maximize2, FileText, Check, Archive,
-  X
-} from 'lucide-react';
-
 const getIncidentConfig = (type) => {
   const map = {
-    'Banjir': { icon: CloudRain, color: 'bg-blue-500' },
-    'Banjir Bandang': { icon: CloudLightning, color: 'bg-indigo-700' },
-    'Cuaca Ekstrim': { icon: CloudLightning, color: 'bg-slate-700' },
-    'Gempabumi': { icon: Activity, color: 'bg-orange-600' },
-    'Tanah Longsor': { icon: Mountain, color: 'bg-amber-800' },
-    'Letusan Gunung Api': { icon: Mountain, color: 'bg-red-700' },
-    'Tsunami': { icon: Waves, color: 'bg-blue-900' },
-    'Kekeringan': { icon: Sun, color: 'bg-yellow-600' },
-    'Kebakaran Hutan dan Lahan': { icon: Flame, color: 'bg-orange-700' },
-    'Likuefaksi': { icon: Mountain, color: 'bg-stone-600' }
+    'Banjir': { icon: 'fa-house-flood-water', color: 'bg-blue-500' },
+    'Banjir Bandang': { icon: 'fa-cloud-showers-heavy', color: 'bg-indigo-700' },
+    'Cuaca Ekstrim': { icon: 'fa-bolt-lightning', color: 'bg-slate-700' },
+    'Gempabumi': { icon: 'fa-house-crack', color: 'bg-orange-600' },
+    'Tanah Longsor': { icon: 'fa-hill-rockslide', color: 'bg-amber-800' },
+    'Letusan Gunung Api': { icon: 'fa-volcano', color: 'bg-red-700' },
+    'Tsunami': { icon: 'fa-house-tsunami', color: 'bg-blue-900' },
+    'Kekeringan': { icon: 'fa-sun-plant-wilt', color: 'bg-yellow-600' },
+    'Kebakaran Hutan dan Lahan': { icon: 'fa-fire-flame-curved', color: 'bg-orange-700' },
+    'Likuefaksi': { icon: 'fa-mountain-sun', color: 'bg-stone-600' }
   };
-  return map[type] || { icon: AlertTriangle, color: 'bg-slate-500' };
+  return map[type] || { icon: 'fa-circle-exclamation', color: 'bg-slate-500' };
 };
 
 const STATUS_THEME = {
@@ -207,26 +200,24 @@ const CompleteView = ({ incidents = [], onRefresh, onAction, onSelect }) => {
         {filtered.map(i => {
           const s = i.status?.toUpperCase() || 'REPORTED';
           return (
-          <div key={i.id} className={`bg-white rounded-xl md:rounded-[45px] border transition-all duration-500 overflow-hidden ${expandedId === i.id ? 'shadow-2xl border-[#006432] ring-8 ring-green-50' : 'shadow-md border-slate-100'}`}>
+          <div key={i.id} className={`bg-white rounded-[45px] border transition-all duration-500 overflow-hidden ${expandedId === i.id ? 'shadow-2xl border-[#006432] ring-8 ring-green-50' : 'shadow-md border-slate-100'}`}>
             
-            <div className="p-4 md:p-6 flex flex-col md:flex-row items-start md:items-center justify-between cursor-pointer gap-4 md:gap-6" onClick={() => handleToggleRow(i)}>
-              <div className="flex gap-4 md:gap-6 items-start md:items-center w-full">
-                <div className={`shrink-0 w-12 h-12 md:w-14 md:h-14 rounded- md:rounded-[22px] flex flex-col items-center justify-center shadow-xl text-white ${getIncidentConfig(i.disaster_type).color}`}>
-                  {React.createElement(getIncidentConfig(i.disaster_type).icon, { size: 20, className: "md:w-6 md:h-6" })}
-                  <span className="text-[6px] md:text-[7px] font-black mt-1">{i.priority_score || 0} PTS</span>
+            <div className="p-6 flex flex-col md:flex-row items-center justify-between cursor-pointer gap-6" onClick={() => handleToggleRow(i)}>
+              <div className="flex gap-6 items-center flex-1">
+                <div className={`w-14 h-14 rounded-[22px] flex flex-col items-center justify-center shadow-xl text-white ${getIncidentConfig(i.disaster_type).color}`}>
+                  <i className={`fas ${getIncidentConfig(i.disaster_type).icon} text-2xl`}></i>
+                  <span className="text-[7px] font-black mt-1">{i.priority_score || 0} PTS</span>
                 </div>
-                <div className="leading-tight min-w-0 flex-1 pt-1 md:pt-0">
-                  <h4 className="font-black text-slate-800 uppercase italic text-sm md:text-lg tracking-tight line-clamp-2 md:truncate">{i.title}</h4>
-                  <p className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase mt-1 tracking-widest flex items-center gap-1">
-                     <Clock size={10} /> {new Date(i.created_at).toLocaleString()}
-                  </p>
+                <div className="leading-tight min-w-0 flex-1">
+                  <h4 className="font-black text-slate-800 uppercase italic text-md md:text-lg tracking-tighter truncate">{i.title}</h4>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase mt-1 tracking-widest"><i className="fas fa-clock mr-1"></i> {new Date(i.created_at).toLocaleString()}</p>
                 </div>
               </div>
-              <div className="flex items-center justify-between w-full md:w-auto mt-2 md:mt-0 pl-16 md:pl-0">
-                 <span className={`px-3 py-1 md:px-4 md:py-1.5 rounded-full text-[9px] md:text-[10px] font-black uppercase text-white shadow-md md:shadow-lg shrink-0 ${STATUS_THEME[s]?.color || 'bg-slate-400'} ${s === 'REPORTED' ? 'animate-pulse' : ''}`}>
+              <div className="flex items-center gap-4">
+                 <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase text-white shadow-lg ${STATUS_THEME[s]?.color || 'bg-slate-400'} ${s === 'REPORTED' ? 'animate-pulse' : ''}`}>
                     {s}
                  </span>
-                 <ChevronDown size={18} className={`transition-transform ${expandedId === i.id ? 'rotate-180 text-[#006432]' : 'text-slate-300'}`} />
+                 <i className={`fas fa-chevron-down transition-transform ${expandedId === i.id ? 'rotate-180 text-[#006432]' : 'text-slate-300'}`}></i>
               </div>
             </div>
 
@@ -292,7 +283,7 @@ const CompleteView = ({ incidents = [], onRefresh, onAction, onSelect }) => {
                                   className="w-full h-48 object-cover group-hover:scale-110 transition-transform duration-700" 
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent flex items-end p-4">
-                                  <button onClick={() => window.open(i.photo_data)} className="text-white text-[9px] font-bold uppercase flex items-center gap-2"><Maximize2 size={12} /> Perbesar Foto</button>
+                                  <button onClick={() => window.open(i.photo_data)} className="text-white text-[9px] font-bold uppercase"><i className="fas fa-expand mr-2"></i> Perbesar Foto</button>
                                 </div>
                               </div>
                             </div>
@@ -333,7 +324,7 @@ const CompleteView = ({ incidents = [], onRefresh, onAction, onSelect }) => {
                           <LifecycleBtn num="4" label="Action" active={s === 'COMMANDED'} done={['ACTION', 'COMPLETED'].includes(s)} onClick={()=>onAction('action', i)} />
                           
                           {/* Step 5: Archive */}
-                          <button onClick={()=>handleFlowUpdate(i.id, 'COMPLETED')} disabled={s !== 'ACTION'} className={`mt-4 py-4 rounded-[25px] font-black text-[10px] uppercase shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 ${s === 'ACTION' ? 'bg-slate-900 text-white cursor-pointer hover:bg-black' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}><Archive size={14} className="text-amber-500" /> Archive Incident</button>
+                          <button onClick={()=>handleFlowUpdate(i.id, 'COMPLETED')} disabled={s !== 'ACTION'} className={`mt-4 py-4 rounded-[25px] font-black text-[10px] uppercase shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 ${s === 'ACTION' ? 'bg-slate-900 text-white cursor-pointer hover:bg-black' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}><i className="fas fa-archive text-amber-500"></i> Archive Incident</button>
                        </div>
 
                        <div className="bg-white p-6 rounded-[40px] border border-slate-100 shadow-inner flex flex-col gap-4 h-[480px]">
@@ -358,7 +349,7 @@ const CompleteView = ({ incidents = [], onRefresh, onAction, onSelect }) => {
                  )}
 
                  <div className="mt-10 pt-6 border-t border-slate-100 flex justify-between items-center">
-                    <button onClick={()=>generatePDF(i)} className="bg-red-600 text-white px-10 py-3.5 rounded-[22px] font-black text-[11px] uppercase shadow-xl flex items-center gap-3 active:scale-95"><FileText size={14} /> Generate SITREP</button>
+                    <button onClick={()=>generatePDF(i)} className="bg-red-600 text-white px-10 py-3.5 rounded-[22px] font-black text-[11px] uppercase shadow-xl flex items-center gap-3 active:scale-95"><i className="fas fa-file-pdf"></i> Generate SITREP</button>
                     <button onClick={() => setExpandedId(null)} className="text-[10px] font-black text-slate-300 hover:text-slate-500 uppercase tracking-widest italic underline">➔ Tutup Workspace</button>
                  </div>
               </div>
@@ -388,7 +379,7 @@ const TextArea = ({ label, value, onChange, placeholder }) => (
 const CheckItem = ({ label, checked }) => (
   <div className="flex items-center gap-3">
     <div className={`w-4 h-4 rounded-lg flex items-center justify-center border-2 transition-all ${checked ? 'bg-[#006432] border-[#006432] text-white shadow-lg shadow-green-200' : 'bg-white border-slate-200'}`}>
-      {checked && <Check size={10} strokeWidth={4} />}
+      {checked && <i className="fas fa-check text-[7px]"></i>}
     </div>
     <span className={`text-[10px] font-bold transition-all ${checked ? 'text-[#006432] italic' : 'text-slate-400'}`}>{label}</span>
   </div>
@@ -401,7 +392,7 @@ const LifecycleBtn = ({ num, label, active, done, onClick, onReject, showReject 
        <div onClick={() => isClickable && onClick()} className={`flex items-center justify-between p-4 rounded-[25px] border-2 transition-all ${active ? 'bg-[#006432] border-[#006432] text-white shadow-xl scale-[1.02] cursor-pointer' : done ? 'bg-green-50 border-green-100 opacity-90 cursor-pointer hover:bg-green-100' : 'bg-white border-slate-50 opacity-40 cursor-not-allowed'}`}>
           <div className="flex items-center gap-4">
              <div className={`w-7 h-7 rounded-full flex items-center justify-center font-black text-[10px] ${done ? 'bg-[#006432] text-white' : active ? 'bg-amber-400 text-[#006432]' : 'bg-slate-200 text-slate-400'}`}>
-                {done ? <Check size={12} strokeWidth={3} /> : num}
+                {done ? <i className="fas fa-check"></i> : num}
              </div>
              <div className="flex flex-col leading-none">
                 <span className={`text-[11px] font-black uppercase ${active ? 'text-white' : done ? 'text-[#006432]' : 'text-slate-300'}`}>{label}</span>
@@ -410,7 +401,7 @@ const LifecycleBtn = ({ num, label, active, done, onClick, onReject, showReject 
           </div>
           
           {showReject && (
-             <button onClick={(e) => { e.stopPropagation(); onReject(); }} className="bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center text-[12px] hover:bg-red-800 transition-all active:scale-75 shadow-xl border-2 border-white" title="Reject / Fake Report"><X size={14} strokeWidth={3} /></button>
+             <button onClick={(e) => { e.stopPropagation(); onReject(); }} className="bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center text-[12px] hover:bg-red-800 transition-all active:scale-75 shadow-xl border-2 border-white" title="Reject / Fake Report"><i className="fas fa-times"></i></button>
           )}
        </div>
     </div>

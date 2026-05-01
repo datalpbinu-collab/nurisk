@@ -1,0 +1,762 @@
+﻿import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { parse } from 'papaparse';
+import * as XLSX from 'xlsx';
+import api from '../services/api';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  RadialLinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Line, Bar, Radar } from 'react-chartjs-2';
+import { KAB_JATENG, DISASTER_TYPES } from '../utils/constants';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  RadialLinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
+const DISASTER_TYPE_COLORS = {
+  'Banjir': '#007bff',
+  'Longsor': '#dc3545',
+  'Gempa': '#ffc107',
+  'Kebakaran': '#fd7e14',
+  'Angin Puting Beliung': '#6f42c1',
+  'Letusan Gunung Api': '#28a745',
+  'Kekeringan': '#6c757d',
+  'Tsunami': '#17a2b8',
+  'Cuaca Ekstrim': '#e83e8c',
+  'Likuefaksi': '#20c997',
+  'Banjir Bandang': '#0056b3',
+  'Unknown': '#adb5bd',
+  'Other': '#6c757d',
+};
+
+const getDisasterColor = (type) => DISASTER_TYPE_COLORS[type] || DISASTER_TYPE_COLORS['Other']; // Helper function
+
+const DisasterTrendAnalyzer = ({ onBack, user }) => {
+  const [csvData, setCsvData] = useState([]);
+  const [monthlyTrends, setMonthlyTrends] = useState([]);
+  const [yearlyTrends, setYearlyTrends] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [predictiveInsights, setPredictiveInsights] = useState({ // State untuk menyimpan hasil prediksi
+    monthly: { predictions: {}, nextPeriod: '' }, 
+    yearly: { predictions: {}, nextPeriod: '' } 
+  });
+  const [backendForecast, setBackendForecast] = useState(null);
+  const [exporting, setExporting] = useState(false);
+  const [error, setError] = useState('');
+  const [allHistoricalData, setAllHistoricalData] = useState([]);
+  const [dataPage, setDataPage] = useState(1);
+  const [totalData, setTotalData] = useState(0);
+  const fileInputRef = useRef(null);
+  const [selectedRegion, setSelectedRegion] = useState(() => localStorage.getItem('disasterTrendRegion') || 'all'); // Filter region
+  const [selectedDisasterType, setSelectedDisasterType] = useState(() => localStorage.getItem('disasterTrendDisasterType') || 'all'); // Filter jenis bencana
+
+  // Refs untuk menyimpan metadata prediksi yang digunakan dalam hook useMemo Chart
+  const monthlyPredictionsRef = useRef({ predictions: {}, nextPeriod: '' });
+  const yearlyPredictionsRef = useRef({ predictions: {}, nextPeriod: '' });
+
+  const calculateMovingAverage = (data, windowSize) => {
+    if (data.length < windowSize) return data.map(() => null);
+    const movingAverages = [];
+    for (let i = 0; i < data.length; i++) {
+      if (i < windowSize - 1) {
+        movingAverages.push(null);
+      } else {
+        const sum = data.slice(i - windowSize + 1, i + 1).reduce((acc, val) => acc + val, 0);
+        movingAverages.push(sum / windowSize);
+      }
+    }
+    return movingAverages;
+  };
+
+  // --- FETCH TRENDS FROM BACKEND ---
+  // Dipindahkan ke atas untuk memperbaiki error "Cannot access before initialization"
+  const fetchTrends = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (selectedRegion !== 'all') params.append('region', selectedRegion);
+      if (selectedDisasterType !== 'all') params.append('disaster_type', selectedDisasterType);
+      params.append('page', dataPage);
+      params.append('limit', 50);
+      
+       const [mRes, yRes, fRes, allRes] = await Promise.all([
+         api.get(`/historical-data/trends?period=monthly&${params.toString()}`),
+         api.get(`/historical-data/trends?period=yearly&${params.toString()}`),
+         api.get(`/historical-data/forecast?region=${selectedRegion}`),
+         api.get(`/historical-data/data?${params.toString()}`) // Mengambil semua data historis untuk tabel
+       ]);
+      
+      setMonthlyTrends(mRes.data || []);
+      setYearlyTrends(yRes.data || []);
+      setBackendForecast(fRes.data);
+      setAllHistoricalData(allRes.data.data || []);
+      setTotalData(allRes.data.total || 0);
+    } catch (err) {
+      console.error("Sync Error:", err);
+      setError("Gagal memuat tren data dari sistem.");
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedRegion, selectedDisasterType, dataPage]);
+
+  // --- FILE UPLOAD HANDLER ---
+  const handleFileUpload = useCallback((event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setLoading(true);
+    setError('');
+
+    // Helper functions for Excel date/time conversion
+    const excelSerialToDate = (serial) => {
+      if (serial === null || serial === undefined || serial === '') return '';
+      
+      // Handle Date object from Excel
+      if (serial instanceof Date) {
+        const y = serial.getFullYear();
+        const m = String(serial.getMonth()+1).padStart(2,'0');
+        const d = String(serial.getDate()).padStart(2,'0');
+        return `${y}-${m}-${d}`;
+      }
+      
+      if (typeof serial === 'string') {
+        // Already YYYY-MM-DD format
+        if (serial.includes('-') && serial.length >= 10) {
+          return serial.substring(0,10).split('T')[0];
+        }
+        // Handle DD/MM/YYYY (Indonesian format) - like 11/01/2026
+        if (serial.includes('/')) {
+          const parts = serial.split('/');
+          if (parts.length === 3 && parts[2].length === 4) {
+            const day = parts[0];
+            const month = parts[1];
+            const year = parts[2].split(' ')[0];
+            return `${year}-${month.padStart(2,'0')}-${day.padStart(2,'0')}`;
+          }
+        }
+      }
+      
+      // Handle Excel serial number
+      const num = parseFloat(serial);
+      if (isNaN(num)) return '';
+      
+      const excelEpoch = new Date(1899,11,30);
+      const date = new Date(excelEpoch.getTime() + num * 86400000);
+      const y = date.getFullYear();
+      const m = String(date.getMonth()+1).padStart(2,'0');
+      const d = String(date.getDate()).padStart(2,'0');
+      return `${y}-${m}-${d}`;
+    };
+
+    const excelTimeSerialToStr = (val) => {
+      if (!val) return '';
+      const num = parseFloat(val);
+      if (isNaN(num) || num >= 1) return val;
+      const totalSeconds = Math.round(num * 86400);
+      const h = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+      const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+      const s = String(totalSeconds % 60).padStart(2, '0');
+      return `${h}:${m}:${s}`;
+    };
+
+    const processAndUpload = async (rawData) => {
+      const formattedData = rawData.map(row => {
+        // Normalisasi key (case-insensitive & trim spasi)
+        const cleanRow = Object.keys(row).reduce((acc, key) => {
+          acc[key.toLowerCase().trim()] = row[key];
+          return acc;
+        }, {});
+
+        // Convert Excel serial date
+        const tanggalRaw = cleanRow['tanggal kejadian'] || cleanRow['tanggal'] || cleanRow['date'] || cleanRow['event_date'] || '';
+        const tanggal = excelSerialToDate(tanggalRaw); // Returns YYYY-MM-DD string
+        
+        // Convert Excel time serial
+        const jamRaw = String(cleanRow['jam kejadian'] || cleanRow['jam'] || cleanRow['time'] || '');
+        const jam = excelTimeSerialToStr(jamRaw) || jamRaw;
+
+        // ... other code ...
+
+        // Combine date and time (format: YYYY-MM-DD HH:MM:SS)
+        let event_date = tanggal;
+        if (jam && jam.trim() !== '') {
+          const timeFormatted = jam.includes(':') ? jam.split('GMT')[0].trim() : `${jam}:00`;
+          event_date = `${tanggal} ${timeFormatted}:00`;
+        }
+          }
+        }
+
+        // Combine date and time (format: YYYY-MM-DD HH:MM:SS)
+        // Pastikan tanggal bersih tanpa timezone - hanya ambil YYYY-MM-DD
+        const cleanDate = tanggal.toString().substring(0, 10); // Ambil hanya YYYY-MM-DD
+        let event_date = cleanDate;
+        if (jam && jam.trim() !== '') {
+          const timeFormatted = jam.includes(':') ? jam.substring(0, 5) : `${jam}:00`;
+          event_date = `${cleanDate}T${timeFormatted}:00`; // ISO format tanpa timezone
+        }
+
+        return {
+          region,
+          disaster_type: cleanRow['jenis bencana'] || cleanRow['jenis kejadian'] || cleanRow['disaster_type'] || 'Lainnya',
+          event_date,
+          time: jam,
+          latitude: lat,
+          longitude: lng,
+        };
+      }).filter(row => row.region && row.disaster_type && row.event_date);
+
+      if (formattedData.length === 0) {
+        setError("Data tidak valid. Gunakan kolom: Kab / Kota, Jenis Bencana, Tanggal, Jam");
+        setLoading(false);
+        return;
+      }
+
+       try {
+         const response = await api.post('historical-data/upload', { data: formattedData });
+         setCsvData(formattedData); // Trigger re-fetch trends
+         fetchTrends(); // Refresh data grafik dan tabel
+         alert(`Berhasil! ${response.data.totalProcessed || formattedData.length} data diupload.${response.data.skipped > 0 ? ` (${response.data.skipped} dilewati)` : ''}`);
+       } catch (err) {
+         setError(`Gagal upload: ${err.response?.data?.error || err.message}`);
+       } finally {
+         setLoading(false);
+       }
+    };
+
+       if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+       const reader = new FileReader();
+       reader.onload = (e) => {
+         try {
+           const data = new Uint8Array(e.target.result);
+           const workbook = XLSX.read(data, { type: 'array' }); // Remove cellDates
+           const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: '' });
+          
+          if (jsonData.length > 5000) {
+            if (!window.confirm(`File berisi ${jsonData.length} baris data. Upload akan diproses dalam batch. Lanjutkan?`)) {
+              setLoading(false);
+              return;
+            }
+          }
+          
+          processAndUpload(jsonData);
+        } catch (err) {
+          setError("Gagal membaca file Excel. Pastikan format file benar.");
+          setLoading(false);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => processAndUpload(results.data),
+        error: (err) => { setError(err.message); setLoading(false); }
+      });
+    }
+  }, [fetchTrends]);
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Apakah Anda yakin ingin menghapus data ini secara permanen?")) return;
+    
+    setLoading(true);
+    try {
+      await api.delete(`/historical-data/${id}`);
+      alert("Data berhasil dihapus dari sistem.");
+      fetchTrends(); // Refresh data grafik dan tabel
+    } catch (err) {
+      alert("Gagal menghapus data: " + (err.response?.data?.error || err.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- EFFECT HOOKS ---
+  useEffect(() => { localStorage.setItem('disasterTrendRegion', selectedRegion); }, [selectedRegion]);
+  useEffect(() => { localStorage.setItem('disasterTrendDisasterType', selectedDisasterType); }, [selectedDisasterType]);
+  useEffect(() => { fetchTrends(); }, [fetchTrends, csvData]); // Re-fetch when filters or CSV data changes
+
+  // --- PREDICTIVE INSIGHTS (MONTHLY & YEARLY) ---
+  useEffect(() => {
+    // Monthly predictions
+    if (monthlyTrends.length > 0) {
+      const uniquePeriods = [...new Set(monthlyTrends.map(item => item.period))].sort();
+      const monthlyPredictions = {};
+      monthlyTrends.forEach(item => {
+        monthlyPredictions[item.disaster_type] = (monthlyPredictions[item.disaster_type] || 0) + (item.count || 0);
+      });
+
+      let nextMonthLabel = 'Periode Berikutnya';
+      if (uniquePeriods.length > 0) {
+        const lastPeriod = uniquePeriods[uniquePeriods.length - 1];
+        const [year, month] = lastPeriod.split('-').map(Number);
+        const nextMonth = month === 12 ? 1 : month + 1;
+        const nextYear = month === 12 ? year + 1 : year;
+        nextMonthLabel = `${nextYear}-${String(nextMonth).padStart(2, '0')}`;
+      }
+      setPredictiveInsights(prev => ({ 
+        ...prev, 
+        monthly: { predictions: monthlyPredictions, nextPeriod: nextMonthLabel } 
+      }));
+      monthlyPredictionsRef.current = { predictions: monthlyPredictions, nextPeriod: nextMonthLabel }; // Update ref
+    }
+
+    // Yearly predictions
+    if (yearlyTrends.length > 0) {
+      const uniquePeriods = [...new Set(yearlyTrends.map(item => item.period))].sort();
+      const yearlyPredictions = {};
+      uniquePeriods.forEach(period => {
+        const items = yearlyTrends.filter(i => i.period === period);
+        items.forEach(item => {
+          if (!yearlyPredictions[item.disaster_type]) {
+            yearlyPredictions[item.disaster_type] = 0;
+          }
+          yearlyPredictions[item.disaster_type] += item.count || 0;
+        });
+      });
+      
+      let nextYearLabel = 'Tahun Berikutnya';
+      if (uniquePeriods.length > 0) {
+        const lastPeriod = uniquePeriods[uniquePeriods.length - 1];
+        nextYearLabel = `${Number(lastPeriod) + 1}`;
+      }
+      
+      setPredictiveInsights(prev => ({ 
+        ...prev, 
+        yearly: { predictions: yearlyPredictions, nextPeriod: nextYearLabel } 
+      }));
+      yearlyPredictionsRef.current = { predictions: yearlyPredictions, nextPeriod: nextYearLabel }; // Update ref
+    }
+  }, [monthlyTrends, yearlyTrends]);
+
+  // --- EXPORT TO CSV ---
+  const exportToCsv = useCallback((data, filename) => {
+    if (!data || data.length === 0) return alert('Tidak ada data.');
+    setExporting(true);
+    try {
+      const headers = Object.keys(data[0]);
+      const csvRows = [
+        headers.map(header => `"${header}"`).join(','),
+        ...data.map(row => headers.map(header => `"${String(row[header] || '').replace(/"/g, '""')}"`).join(','))
+      ].join('\n');
+      const blob = new Blob([csvRows], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.setAttribute('download', filename);
+      link.click();
+    } catch (e) {
+      alert("Gagal ekspor.");
+    } finally {
+      setExporting(false);
+    }
+  }, []);
+
+  // --- CHART DATA PREPARATION ---
+  const monthlyChartData = useMemo(() => {
+    const uniquePeriods = [...new Set(monthlyTrends.map(item => item.period))].sort();
+    const uniqueDisasterTypes = [...new Set(monthlyTrends.map(item => item.disaster_type))];
+    const datasets = [];
+
+    uniqueDisasterTypes.forEach(type => {
+      const dataForType = monthlyTrends.filter(item => item.disaster_type === type);
+      const counts = uniquePeriods.map(period => dataForType.find(d => d.period === period)?.count || 0);
+      
+      datasets.push({
+        label: `${type} (Kejadian)`,
+        data: counts,
+        borderColor: getDisasterColor(type),
+        backgroundColor: getDisasterColor(type) + '40', // Semi-transparent fill
+        tension: 0.3,
+        fill: true,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+      });
+    });
+    return { labels: uniquePeriods, datasets };
+  }, [monthlyTrends, getDisasterColor]);
+
+  const yearlyChartData = useMemo(() => {
+    const uniquePeriods = [...new Set(yearlyTrends.map(item => item.period))].sort();
+    const uniqueDisasterTypes = [...new Set(yearlyTrends.map(item => item.disaster_type))];
+    const datasets = [];
+
+    uniqueDisasterTypes.forEach(type => {
+      const dataForType = yearlyTrends.filter(item => item.disaster_type === type);
+      const counts = uniquePeriods.map(period => dataForType.find(d => d.period === period)?.count || 0);
+
+      datasets.push({
+        label: `${type} (Kejadian)`,
+        data: counts,
+        backgroundColor: getDisasterColor(type),
+        borderRadius: 8,
+      });
+
+      // Moving Average (e.g., 2-year moving average)
+      const countsOnly = uniquePeriods.map(period => dataForType.find(d => d.period === period)?.count || 0);
+      const movingAverageData = calculateMovingAverage(countsOnly, 2);
+      if (movingAverageData.some(val => val !== null)) {
+        datasets.push({
+          label: `${type} (MA 2 Tahun)`,
+          data: movingAverageData,
+          borderColor: getDisasterColor(type) + '80',
+          borderDash: [5, 5], // Dashed line for average
+          backgroundColor: 'transparent',
+          type: 'line', // Force line type for average on bar chart
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          tension: 0,
+        });
+      }
+
+      // Simple average line for this disaster type
+      const totalCount = countsOnly.reduce((sum, val) => sum + val, 0);
+      const average = countsOnly.length > 0 ? totalCount / countsOnly.length : 0;
+      if (average > 0) {
+        datasets.push({
+          label: `${type} (Rata-rata Historis)`,
+          data: uniquePeriods.map(() => average),
+          borderColor: getDisasterColor(type) + '30',
+          borderDash: [2, 2],
+          backgroundColor: 'transparent',
+          type: 'line',
+          tension: 0,
+        });
+      }
+    });
+
+    return { labels: uniquePeriods, datasets };
+  }, [yearlyTrends, calculateMovingAverage, getDisasterColor]);
+
+  const radarChartData = useMemo(() => {
+    const uniqueDisasterTypes = [...new Set(yearlyTrends.map(item => item.disaster_type))];
+    const data = uniqueDisasterTypes.map(type => {
+      return yearlyTrends
+        .filter(item => item.disaster_type === type)
+        .reduce((sum, item) => sum + (item.count || 0), 0);
+    });
+
+    return {
+      labels: uniqueDisasterTypes,
+      datasets: [
+        {
+          label: 'Profil Risiko Wilayah',
+          data: data,
+          backgroundColor: '#00643240',
+          borderColor: '#006432',
+          pointBackgroundColor: '#006432',
+          pointBorderColor: '#fff',
+          pointHoverBackgroundColor: '#fff',
+          pointHoverBorderColor: '#006432',
+        },
+      ],
+    };
+  }, [yearlyTrends]);
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'top' },
+    },
+    scales: { // Default scales for Line/Bar, can be overridden
+      y: {
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: 'Jumlah Kejadian'
+        }
+      },
+      x: {
+        title: {
+          display: true,
+          text: 'Periode'
+        }
+      }
+    }
+  };
+
+  return (
+    <div className="p-4 md:p-10 space-y-8 animate-in fade-in duration-500 font-sans">
+      <div className="flex justify-between items-center border-b-2 border-slate-100 pb-6">
+        <h2 className="text-2xl md:text-3xl font-black text-[#006432] uppercase italic tracking-tighter">
+          Disaster Trend Analyzer
+        </h2>
+        {onBack && (
+          <button onClick={onBack} className="text-[10px] font-bold text-slate-400 uppercase hover:underline">
+            â† Kembali
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div className="p-4 bg-red-50 border-l-4 border-red-500 text-red-700 text-[10px] font-black uppercase tracking-widest animate-pulse">
+          âš ï¸ {error}
+        </div>
+      )}
+
+      {/* Upload Section */}
+      {['ADMIN_PWNU', 'SUPER_ADMIN', 'STAFF_PWNU'].includes(user?.role?.toUpperCase()) && (
+        <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-50 space-y-6">
+          <h3 className="text-lg font-black text-slate-800 uppercase italic">Upload Data Historis</h3>
+          <p className="text-sm text-slate-500">
+            Format: <code className="bg-slate-100 p-1 rounded">Kab / Kota, Jenis Bencana, Tanggal Kejadian, Jam Kejadian</code>
+            <br />
+            Contoh: <code className="bg-slate-100 p-1 rounded">Kudus, Longsor, 11/01/2026, 13:30</code>
+          </p>
+          <div className="flex flex-col md:flex-row gap-4 items-center">
+            <input
+              type="file"
+              accept=".csv, .xlsx, .xls"
+              onChange={handleFileUpload}
+              ref={fileInputRef}
+              className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[#006432] file:text-white hover:file:bg-green-700"
+            />
+            <button 
+              onClick={downloadTemplate}
+              className="shrink-0 bg-slate-100 text-[#006432] px-6 py-2.5 rounded-full font-black text-[10px] shadow-sm hover:bg-slate-200 transition-all uppercase flex items-center gap-2 border border-slate-200"
+            >
+              <i className="fas fa-download"></i> Unduh Template
+            </button>
+          </div>
+          {loading && <p className="text-blue-500">Processing CSV and uploading...</p>}
+          {error && <p className="text-red-500">{error}</p>}
+        </div>
+      )}
+
+      {/* New Filter Section */}
+      <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-50 space-y-6">
+        <h3 className="text-lg font-black text-slate-800 uppercase italic">Filter Tren</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-[9px] font-black text-slate-400 uppercase ml-2 tracking-widest">Kota/Kabupaten</label>
+            <select
+              value={selectedRegion}
+              onChange={(e) => setSelectedRegion(e.target.value)}
+              className="w-full p-4 bg-slate-50 rounded-2xl text-sm font-bold border-none shadow-inner ring-1 ring-slate-200 outline-none"
+            >
+              <option value="all">Semua Wilayah</option>
+              {KAB_JATENG.map((region) => (
+                <option key={region} value={region}>{region}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-[9px] font-black text-slate-400 uppercase ml-2 tracking-widest">Jenis Bencana</label>
+            <select
+              value={selectedDisasterType}
+              onChange={(e) => setSelectedDisasterType(e.target.value)}
+              className="w-full p-4 bg-slate-50 rounded-2xl text-sm font-bold border-none shadow-inner ring-1 ring-slate-200 outline-none"
+            >
+              <option value="all">Semua Jenis</option>
+              {DISASTER_TYPES.map((type) => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Monthly Chart Section */}
+      {monthlyTrends.length > 0 && (
+        <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-50 space-y-6">
+          <h3 className="text-lg font-black text-slate-800 uppercase italic">Monthly Disaster Trends</h3>
+          <div className="h-72 w-full">
+            <Line data={monthlyChartData} options={{...chartOptions, scales: { y: { beginAtZero: true }, x: { title: { display: true, text: 'Bulan' }}} }} />
+          </div>
+          <div className="flex justify-end mt-4">
+            <button onClick={() => exportToCsv(monthlyTrends, 'monthly_disaster_trends.csv')} disabled={exporting} className="bg-[#006432] text-white px-4 py-2 rounded-lg text-sm font-black uppercase shadow-md hover:bg-green-700 transition-all">
+              {exporting ? 'Mengekspor...' : 'Export Monthly Data'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Yearly Chart Section */}
+      {yearlyTrends.length > 0 && (
+        <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-50 space-y-6">
+          <h3 className="text-lg font-black text-slate-800 uppercase italic">Yearly Disaster Trends</h3>
+          <div className="h-72 w-full">
+            <Bar data={yearlyChartData} options={{...chartOptions, scales: { y: { beginAtZero: true }, x: { title: { display: true, text: 'Tahun' }}} }} />
+          </div>
+          <div className="flex justify-end mt-4">
+            <button onClick={() => exportToCsv(yearlyTrends, 'yearly_disaster_trends.csv')} disabled={exporting} className="bg-[#006432] text-white px-4 py-2 rounded-lg text-sm font-black uppercase shadow-md hover:bg-green-700 transition-all">
+              {exporting ? 'Mengekspor...' : 'Export Yearly Data'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Radar Chart Section */}
+      {yearlyTrends.length > 0 && (
+        <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-50 space-y-6">
+          <h3 className="text-lg font-black text-slate-800 uppercase italic">Disaster Type Comparison (Radar)</h3>
+          <div className="h-96 w-full">
+            <Radar data={radarChartData} options={{
+              ...chartOptions,
+              scales: { r: { beginAtZero: true, ticks: { stepSize: 1, backdropColor: 'transparent' } } }
+            }} />
+          </div>
+        </div>
+      )}
+
+      {/* Predictive Insights Section */}
+      {(Object.keys(predictiveInsights.monthly.predictions).length > 0 || Object.keys(predictiveInsights.yearly.predictions).length > 0) && (
+        <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-50 space-y-6">
+          <h3 className="text-lg font-black text-slate-800 uppercase italic">Predictive Insights</h3>
+          <div className="space-y-4">
+            {Object.keys(predictiveInsights.monthly.predictions).length > 0 && (
+              <div>
+                <p className="text-sm font-bold text-slate-700 mb-2">Perkiraan Bulanan ({predictiveInsights.monthly.nextPeriod}):</p>
+                <ul className="list-disc list-inside text-sm text-slate-600 space-y-1">
+                  {Object.entries(predictiveInsights.monthly.predictions).map(([type, count]) => (
+                    <li key={type}>
+                      <span className="font-semibold" style={{ color: getDisasterColor(type) }}>{type}</span>: sekitar <span className="font-black">{count}</span> kejadian.
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {Object.keys(predictiveInsights.yearly.predictions).length > 0 && (
+              <div>
+                <p className="text-sm font-bold text-slate-700 mb-2">Perkiraan Tahunan ({predictiveInsights.yearly.nextPeriod}):</p>
+                <ul className="list-disc list-inside text-sm text-slate-600 space-y-1">
+                  {Object.entries(predictiveInsights.yearly.predictions).map(([type, count]) => (
+                    <li key={type}>
+                      <span className="font-semibold" style={{ color: getDisasterColor(type) }}>{type}</span>: sekitar <span className="font-black">{count}</span> kejadian.
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+          <p className="text-[9px] text-slate-400 italic">
+            *Prediksi ini berdasarkan tren historis dan rata-rata bergerak dari data yang diunggah.
+          </p>
+        </div>
+      )}
+
+      {/* All Historical Data Table */}
+      <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-50 space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-black text-slate-800 uppercase italic">Data Historis Tersimpan</h3>
+          <span className="text-sm text-slate-500">Total: {totalData} data</span>
+        </div>
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="min-w-full divide-y divide-slate-200">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">No</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Kota/Kabupaten</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Jenis Bencana</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Tanggal</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Jam</th>
+                {user?.role?.toUpperCase() === 'SUPER_ADMIN' && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider text-center">Aksi</th>
+                )}
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-slate-200">
+              {allHistoricalData.map((item, index) => (
+                <tr key={item.id || index} className="hover:bg-slate-50">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
+                    {((dataPage - 1) * 50) + index + 1}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700 font-medium">{item.region}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <span
+                      className="px-2 py-1 rounded-full text-xs font-bold"
+                      style={{
+                        backgroundColor: getDisasterColor(item.disaster_type) + '20',
+                        color: getDisasterColor(item.disaster_type)
+                      }}
+                    >
+                      {item.disaster_type}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                    {item.event_date ? new Date(item.event_date).toLocaleDateString('id-ID') : '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                    {item.event_date ? new Date(item.event_date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                  </td>
+                  {user?.role?.toUpperCase() === 'SUPER_ADMIN' && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                      <button 
+                        onClick={() => handleDelete(item.id)}
+                        className="text-red-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition-all"
+                        title="Hapus Data"
+                      >
+                        <i className="fas fa-trash-alt"></i>
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+              {allHistoricalData.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="px-6 py-8 text-center text-sm text-slate-400">
+                    Belum ada data historis. Silakan upload file CSV/Excel.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {totalData > 50 && (
+          <div className="flex items-center justify-between pt-4">
+            <button
+              onClick={() => setDataPage(p => Math.max(1, p - 1))}
+              disabled={dataPage === 1}
+              className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50"
+            >
+              â† Sebelumnya
+            </button>
+            <span className="text-sm text-slate-600">
+              Halaman {dataPage} dari {Math.ceil(totalData / 50)}
+            </span>
+            <button
+              onClick={() => setDataPage(p => p + 1)}
+              disabled={dataPage >= Math.ceil(totalData / 50)}
+              className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50"
+            >
+              Selanjutnya â†’
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const downloadTemplate = () => {
+  const data = [
+    {
+      'Kota/Kabupaten': 'Kudus',
+      'Jenis Bencana': 'Longsor',
+      'Tanggal Kejadian': '11/01/2026',
+      'Jam Kejadian': '13:30'
+    }
+  ];
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Template");
+  XLSX.writeFile(workbook, "Format_Data_Historis_Pusdatin.xlsx");
+};
+
+export default DisasterTrendAnalyzer;

@@ -23,8 +23,27 @@ export default defineConfig({
   resolve: {
     dedupe: ['react', 'react-dom'],
     alias: {
-      // Fix for react-leaflet module resolution
       'react-leaflet': 'react-leaflet'
+    }
+  },
+  // ─── Dev Server Config ────────────────────────────────────────────────────
+  server: {
+    port: 5173,
+    host: true, // Bisa diakses dari luar (misal via HP di LAN yang sama)
+    proxy: {
+      // Semua request ke /api/ diteruskan ke backend Docker
+      '/api': {
+        target: 'http://localhost:7860',
+        changeOrigin: true,
+        secure: false,
+      },
+      // WebSocket socket.io juga di-proxy
+      '/socket.io': {
+        target: 'http://localhost:7860',
+        ws: true,
+        changeOrigin: true,
+      }
     }
   }
 });
+

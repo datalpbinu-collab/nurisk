@@ -174,13 +174,13 @@ const MapDisplay = ({ incidents = [], onSelect }) => {
   return (
     <div className="h-full w-full relative bg-[#f1f5f9]">
       
-      <div className="absolute bottom-10 left-6 z-[1000] pointer-events-none" style={{ maxHeight: 'calc(100% - 100px)' }}>
-        <div className="bg-white/90 backdrop-blur-md p-5 rounded-[2rem] border-2 border-[#006432]/10 shadow-2xl w-56 overflow-y-auto custom-scrollbar pointer-events-auto" style={{ maxHeight: 'calc(100vh - 180px)' }}>
+      <div className="absolute bottom-10 left-6 z-[1000] pointer-events-none">
+        <div className="bg-white/90 backdrop-blur-md p-5 rounded-[2rem] border-2 border-[#006432]/10 shadow-2xl space-y-3 w-56">
            <div className="flex items-center gap-3 border-b border-slate-100 pb-2">
               <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></div>
               <span className="text-[10px] font-black text-[#006432] uppercase tracking-[0.1em]">Disaster Legend</span>
            </div>
-           <div className="space-y-2.5 mt-3">
+           <div className="space-y-2.5">
               <LegendItem icon="triangle" color="bg-orange-500" label="Vulkanik (AI)" />
               <LegendItem icon="circle" color="bg-red-600" label="Seismik (BMKG)" />
               <LegendItem icon="square" color="bg-[#006432]" label="Misi Terverifikasi" />
@@ -228,7 +228,7 @@ const MapDisplay = ({ incidents = [], onSelect }) => {
                 >Terapkan Filter</button>
               </div>
               <div className="pt-2">
-                 <p className="text-[8px] font-black text-slate-400 uppercase mb-2 italic">Terrain &amp; Hydro Arsir</p>
+                 <p className="text-[8px] font-black text-slate-400 uppercase mb-2 italic">Terrain & Hydro Arsir</p>
                  <div className="flex items-center gap-2">
                     <div className="w-full h-1.5 bg-gradient-to-r from-blue-300 via-blue-600 to-indigo-900 rounded-full opacity-60"></div>
                     <span className="text-[8px] font-bold text-slate-500 uppercase">Risk</span>
@@ -237,7 +237,6 @@ const MapDisplay = ({ incidents = [], onSelect }) => {
            </div>
         </div>
       </div>
-
 
       <MapContainer 
         center={CENTER_JATENG} zoom={9} minZoom={7} maxZoom={16}

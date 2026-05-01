@@ -129,7 +129,7 @@ const CommandCenter = ({ incidents = [], onRefresh, onAction, onSelect }) => {
       <MapDisplay incidents={displayData} onSelect={setSelectedLocal} />
 
       {/* 3. INTELLIGENCE FEED */}
-      <div className="absolute top-20 left-4 z-[1000] w-[260px] pointer-events-auto shadow-2xl overflow-y-auto custom-scrollbar" style={{ maxHeight: 'calc(100% - 100px)' }}>
+      <div className="absolute top-20 left-4 z-[1000] w-[260px] pointer-events-auto shadow-2xl">
          <IntelligencePanel />
       </div>
 
